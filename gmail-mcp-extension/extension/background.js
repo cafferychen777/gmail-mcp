@@ -25,6 +25,32 @@ function keepServiceWorkerAlive() {
 // Start keeping service worker alive
 keepServiceWorkerAlive();
 
+// Health check for content scripts
+function checkContentScriptHealth() {
+  chrome.tabs.query({ url: 'https://mail.google.com/*' }, (tabs) => {
+    tabs.forEach(tab => {
+      chrome.tabs.sendMessage(tab.id, { action: 'ping' }, (response) => {
+        if (chrome.runtime.lastError || !response) {
+          console.log(`Content script not responding in tab ${tab.id}, re-injecting...`);
+          chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['content.js']
+          }, () => {
+            if (chrome.runtime.lastError) {
+              console.error(`Re-injection failed for tab ${tab.id}:`, chrome.runtime.lastError.message);
+            } else {
+              console.log(`Content script re-injected into tab ${tab.id}`);
+            }
+          });
+        }
+      });
+    });
+  });
+}
+
+// Check content script health every 30 seconds
+setInterval(checkContentScriptHealth, 30000);
+
 async function pollBridgeServer() {
   if (bridgePolling) return;
   bridgePolling = true;
@@ -252,6 +278,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ status: 'acknowledged' });
     return true;
   }
+
+  // Handle manual content script injection request
+  if (request.action === 'injectContentScript') {
+    chrome.tabs.query({ url: 'https://mail.google.com/*' }, (tabs) => {
+      tabs.forEach(tab => {
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content.js']
+        }, (result) => {
+          if (chrome.runtime.lastError) {
+            console.error(`Manual injection failed for tab ${tab.id}:`, chrome.runtime.lastError.message);
+            sendResponse({ success: false, error: chrome.runtime.lastError.message });
+          } else {
+            console.log(`Manual injection successful for tab ${tab.id}`);
+            sendResponse({ success: true });
+          }
+        });
+      });
+    });
+    return true;
+  }
   
   // Handle Gmail action requests (from popup or native host)
   if (request.action && ['getEmails', 'sendEmail', 'readEmail', 'replyEmail', 'composeReply', 'debugPage', 'searchEmails'].includes(request.action)) {
@@ -323,22 +370,31 @@ chrome.runtime.onInstalled.addListener((details) => {
     console.log('Extension installed. Please run the setup script with this ID:', chrome.runtime.id);
   }
   
-  // Inject content script into existing Gmail tabs
+  // Inject content script into existing Gmail tabs with retry
   console.log('Checking for existing Gmail tabs...');
   chrome.tabs.query({ url: 'https://mail.google.com/*' }, (tabs) => {
     console.log(`Found ${tabs.length} Gmail tabs`);
     tabs.forEach(tab => {
       console.log(`Injecting content script into tab ${tab.id}: ${tab.url}`);
-      chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['content.js']
-      }, () => {
-        if (chrome.runtime.lastError) {
-          console.error(`Failed to inject content script into tab ${tab.id}:`, chrome.runtime.lastError.message);
-        } else {
-          console.log(`Content script successfully injected into tab ${tab.id}`);
-        }
-      });
+
+      // Try injection with retry
+      function injectWithRetry(attempts = 3) {
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content.js']
+        }, () => {
+          if (chrome.runtime.lastError) {
+            console.error(`Failed to inject content script into tab ${tab.id} (attempt ${4-attempts}):`, chrome.runtime.lastError.message);
+            if (attempts > 1) {
+              setTimeout(() => injectWithRetry(attempts - 1), 1000);
+            }
+          } else {
+            console.log(`Content script successfully injected into tab ${tab.id}`);
+          }
+        });
+      }
+
+      injectWithRetry();
     });
   });
 });

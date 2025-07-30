@@ -16,8 +16,8 @@
   "content_scripts": [
     {
       "matches": ["https://mail.google.com/*"],
-      "js": ["content-simple.js"],
-      "run_at": "document_idle",
+      "js": ["content.js"],
+      "run_at": "document_end",
       "all_frames": false
     }
   ],

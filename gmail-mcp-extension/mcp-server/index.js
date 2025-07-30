@@ -286,23 +286,23 @@ class GmailMCPServer {
 
               if (result.success && result.data) {
                 const searchData = result.data;
+                const emails = searchData.results || searchData.emails || [];
                 return {
                   content: [{
                     type: 'text',
                     text: `Search Results for "${searchData.query}":
 
-Found ${searchData.totalResults} emails:
+Found ${searchData.count || emails.length} emails:
 
-${searchData.emails.map((email, index) =>
+${emails.map((email, index) =>
   `${index + 1}. From: ${email.sender}
    Subject: ${email.subject}
    Date: ${email.date}
    ID: ${email.id}
    ${email.isUnread ? '📧 UNREAD' : '📖 Read'}
-   Snippet: ${email.snippet.substring(0, 100)}${email.snippet.length > 100 ? '...' : ''}
 `).join('\n')}
 
-Search URL: ${searchData.searchUrl}`
+Search URL: ${searchData.url || window.location.href}`
                   }]
                 };
               } else {

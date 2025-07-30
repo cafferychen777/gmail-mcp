@@ -45,6 +45,35 @@ checkConnectionStatus();
 // Auto-refresh connection status every 5 seconds
 setInterval(checkConnectionStatus, 5000);
 
+// Handle inject content script button
+document.getElementById('inject-script').addEventListener('click', () => {
+  const button = document.getElementById('inject-script');
+  const originalText = button.textContent;
+
+  button.textContent = 'Injecting...';
+  button.disabled = true;
+
+  chrome.runtime.sendMessage({ action: 'injectContentScript' }, (response) => {
+    button.disabled = false;
+
+    if (chrome.runtime.lastError || !response.success) {
+      button.textContent = 'Injection Failed';
+      button.style.backgroundColor = '#f8d7da';
+      setTimeout(() => {
+        button.textContent = originalText;
+        button.style.backgroundColor = '';
+      }, 2000);
+    } else {
+      button.textContent = 'Injected Successfully';
+      button.style.backgroundColor = '#d4edda';
+      setTimeout(() => {
+        button.textContent = originalText;
+        button.style.backgroundColor = '';
+      }, 2000);
+    }
+  });
+});
+
 // Setup button functionality
 document.getElementById('setup').addEventListener('click', () => {
   const setupInfo = document.getElementById('setup-info');
