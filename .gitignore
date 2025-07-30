@@ -83,14 +83,8 @@ Desktop.ini
 logs
 *.log
 
-# Native messaging host files (platform specific)
-mcp-server/native-host.py
-mcp-server/native-host.js
-mcp-server/native-host-mcp.py
-
-# Setup scripts
-setup-native-host.sh
-setup_native_host.py
+# Bridge server logs
+bridge-server.log
 
 # Test files
 test-*.js
