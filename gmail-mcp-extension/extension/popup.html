@@ -90,9 +90,18 @@
     <button id="test-emails">Test Get Emails</button>
     <button id="test-send">Test Send Email</button>
     <button id="test-search">Test Search Emails</button>
-    <button id="inject-script">Inject Content Script</button>
-    <button id="debug-page">Debug Gmail Page</button>
   </div>
+  
+  <details style="margin-top: 10px;">
+    <summary style="cursor: pointer; user-select: none;">Advanced Tools</summary>
+    <div style="margin-top: 10px; padding-left: 10px;">
+      <button id="inject-script">Force Inject Content Script</button>
+      <button id="debug-page">Debug Gmail Page</button>
+      <p style="font-size: 11px; color: #666; margin-top: 5px;">
+        Note: Content scripts are automatically injected. Use "Force Inject" only if experiencing issues.
+      </p>
+    </div>
+  </details>
   
   <div id="test-results" style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 5px; display: none; max-height: 200px; overflow-y: auto;">
     <pre id="results-content" style="margin: 0; font-size: 11px;"></pre>
