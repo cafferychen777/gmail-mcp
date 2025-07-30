@@ -89,6 +89,34 @@ class GmailInterface {
               responseData = await this.searchEmails(searchQuery, searchOptions);
               break;
 
+            case 'markEmailsRead':
+              const emailIds = request.params?.emailIds || request.emailIds;
+              const markAsRead = request.params?.markAsRead ?? request.markAsRead;
+              responseData = await this.markEmailsRead(emailIds, markAsRead);
+              break;
+
+            case 'deleteEmails':
+              const deleteEmailIds = request.params?.emailIds || request.emailIds;
+              const permanent = request.params?.permanent || false;
+              responseData = await this.deleteEmails(deleteEmailIds, permanent);
+              break;
+
+            case 'archiveEmails':
+              const archiveEmailIds = request.params?.emailIds || request.emailIds;
+              responseData = await this.archiveEmails(archiveEmailIds);
+              break;
+
+            case 'getEmailAttachments':
+              const attachmentEmailId = request.params?.emailId || request.emailId;
+              responseData = await this.getEmailAttachments(attachmentEmailId);
+              break;
+
+            case 'downloadAttachment':
+              const downloadEmailId = request.params?.emailId || request.emailId;
+              const attachmentId = request.params?.attachmentId || request.attachmentId;
+              responseData = await this.downloadAttachment(downloadEmailId, attachmentId);
+              break;
+
             default:
               responseData = { error: 'Unknown action' };
           }
@@ -759,6 +787,421 @@ class GmailInterface {
 
     console.log('Debug state:', state);
     return state;
+  }
+
+  async markEmailsRead(emailIds, markAsRead = true) {
+    console.log(`Marking ${emailIds.length} emails as ${markAsRead ? 'read' : 'unread'}`);
+    
+    const results = [];
+    
+    for (const emailId of emailIds) {
+      try {
+        // Find the email row
+        const emailRow = document.querySelector(`span[data-legacy-thread-id="${emailId}"]`)?.closest('tr.zA');
+        
+        if (!emailRow) {
+          results.push({ emailId, success: false, error: 'Email not found' });
+          continue;
+        }
+        
+        // Check current state
+        const isCurrentlyUnread = emailRow.classList.contains('zE') || 
+                                 emailRow.querySelector('.yW .zE') !== null;
+        
+        // If already in target state, skip
+        if ((markAsRead && !isCurrentlyUnread) || (!markAsRead && isCurrentlyUnread)) {
+          results.push({ emailId, success: true, message: 'Already in target state' });
+          continue;
+        }
+        
+        // Select the email row (if not selected)
+        const checkbox = emailRow.querySelector('td.oZ-x3 input[type="checkbox"]') ||
+                        emailRow.querySelector('input[type="checkbox"]');
+        
+        if (checkbox && !checkbox.checked) {
+          checkbox.click();
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        // Find mark button
+        const markButton = this.findMarkReadButton(markAsRead);
+        
+        if (markButton) {
+          markButton.click();
+          await new Promise(resolve => setTimeout(resolve, 200));
+          results.push({ emailId, success: true });
+        } else {
+          // Try keyboard shortcuts
+          if (markAsRead) {
+            // Shift+I to mark as read
+            document.dispatchEvent(new KeyboardEvent('keydown', {
+              key: 'I',
+              shiftKey: true,
+              bubbles: true
+            }));
+          } else {
+            // Shift+U to mark as unread
+            document.dispatchEvent(new KeyboardEvent('keydown', {
+              key: 'U',
+              shiftKey: true,
+              bubbles: true
+            }));
+          }
+          await new Promise(resolve => setTimeout(resolve, 200));
+          results.push({ emailId, success: true, method: 'keyboard' });
+        }
+        
+        // Deselect the checkbox
+        if (checkbox && checkbox.checked) {
+          checkbox.click();
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+      } catch (error) {
+        results.push({ emailId, success: false, error: error.message });
+      }
+    }
+    
+    return { results, totalProcessed: emailIds.length };
+  }
+
+  findMarkReadButton(markAsRead) {
+    // Gmail toolbar mark buttons selectors
+    const selectors = markAsRead ? [
+      '[aria-label*="Mark as read"]',
+      '[data-tooltip*="Mark as read"]',
+      '.ar9.T-I-J3.J-J5-Ji',  // Mark as read button CSS class
+      'div[role="button"][aria-label*="Mark as read"]'
+    ] : [
+      '[aria-label*="Mark as unread"]',
+      '[data-tooltip*="Mark as unread"]',
+      '.ar8.T-I-J3.J-J5-Ji',  // Mark as unread button CSS class
+      'div[role="button"][aria-label*="Mark as unread"]'
+    ];
+    
+    for (const selector of selectors) {
+      const button = document.querySelector(selector);
+      if (button && button.offsetParent !== null) {
+        return button;
+      }
+    }
+    
+    return null;
+  }
+
+  async deleteEmails(emailIds, permanent = false) {
+    console.log(`${permanent ? 'Permanently deleting' : 'Moving to trash'} ${emailIds.length} emails`);
+    
+    // Select emails first
+    const selectedEmails = await this.selectEmails(emailIds);
+    
+    if (selectedEmails.length === 0) {
+      return { results: [], error: 'No emails found to delete' };
+    }
+    
+    try {
+      if (permanent) {
+        // Permanent delete: Shift + Delete
+        document.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'Delete',
+          shiftKey: true,
+          bubbles: true
+        }));
+      } else {
+        // Move to trash: Delete or click delete button
+        const deleteButton = this.findDeleteButton();
+        if (deleteButton) {
+          deleteButton.click();
+        } else {
+          // Use keyboard shortcut
+          document.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'Delete',
+            bubbles: true
+          }));
+        }
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Check for confirmation dialog
+      const confirmDialog = document.querySelector('[role="dialog"]');
+      if (confirmDialog) {
+        const confirmButton = confirmDialog.querySelector('[aria-label*="Delete"]') ||
+                             confirmDialog.querySelector('button[name="ok"]');
+        if (confirmButton) {
+          confirmButton.click();
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      
+      return {
+        results: emailIds.map(id => ({ emailId: id, success: true })),
+        totalProcessed: emailIds.length,
+        action: permanent ? 'permanently_deleted' : 'moved_to_trash'
+      };
+      
+    } catch (error) {
+      return {
+        results: emailIds.map(id => ({ emailId: id, success: false, error: error.message })),
+        error: error.message
+      };
+    }
+  }
+
+  async archiveEmails(emailIds) {
+    console.log(`Archiving ${emailIds.length} emails`);
+    
+    const selectedEmails = await this.selectEmails(emailIds);
+    
+    if (selectedEmails.length === 0) {
+      return { results: [], error: 'No emails found to archive' };
+    }
+    
+    try {
+      // Find archive button
+      const archiveButton = this.findArchiveButton();
+      
+      if (archiveButton) {
+        archiveButton.click();
+      } else {
+        // Use keyboard shortcut 'e'
+        document.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'e',
+          bubbles: true
+        }));
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      return {
+        results: emailIds.map(id => ({ emailId: id, success: true })),
+        totalProcessed: emailIds.length,
+        action: 'archived'
+      };
+      
+    } catch (error) {
+      return {
+        results: emailIds.map(id => ({ emailId: id, success: false, error: error.message })),
+        error: error.message
+      };
+    }
+  }
+
+  async selectEmails(emailIds) {
+    const selectedEmails = [];
+    
+    for (const emailId of emailIds) {
+      const emailRow = document.querySelector(`span[data-legacy-thread-id="${emailId}"]`)?.closest('tr.zA');
+      
+      if (emailRow) {
+        const checkbox = emailRow.querySelector('td.oZ-x3 input[type="checkbox"]') ||
+                        emailRow.querySelector('input[type="checkbox"]');
+        
+        if (checkbox && !checkbox.checked) {
+          checkbox.click();
+          await new Promise(resolve => setTimeout(resolve, 100));
+          selectedEmails.push(emailId);
+        } else if (checkbox && checkbox.checked) {
+          selectedEmails.push(emailId);
+        }
+      }
+    }
+    
+    return selectedEmails;
+  }
+
+  findDeleteButton() {
+    const selectors = [
+      '[aria-label*="Delete"]',
+      '[data-tooltip*="Delete"]',
+      '.ar5.T-I-J3.J-J5-Ji',  // Delete button CSS class
+      'div[role="button"][aria-label*="Delete"]'
+    ];
+    
+    return this.findButtonBySelectors(selectors);
+  }
+
+  findArchiveButton() {
+    const selectors = [
+      '[aria-label*="Archive"]',
+      '[data-tooltip*="Archive"]',
+      '.ar3.T-I-J3.J-J5-Ji',  // Archive button CSS class
+      'div[role="button"][aria-label*="Archive"]'
+    ];
+    
+    return this.findButtonBySelectors(selectors);
+  }
+
+  findButtonBySelectors(selectors) {
+    for (const selector of selectors) {
+      const button = document.querySelector(selector);
+      if (button && button.offsetParent !== null) {
+        return button;
+      }
+    }
+    return null;
+  }
+
+  async getEmailAttachments(emailId) {
+    console.log(`Getting attachments for email: ${emailId}`);
+    
+    // Ensure email is open
+    const emailData = await this.getEmailContent(emailId);
+    if (!emailData || emailData.error) {
+      return { error: 'Failed to open email' };
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Find attachments
+    const attachments = [];
+    
+    // Gmail attachment selectors
+    const attachmentContainers = document.querySelectorAll('.aZo, .aQH, .aZB');
+    
+    attachmentContainers.forEach((container, index) => {
+      try {
+        // Find attachment name
+        const nameElement = container.querySelector('.aV3') || 
+                           container.querySelector('.aZp') ||
+                           container.querySelector('span[role="link"]') ||
+                           container.querySelector('[aria-label*="Download"]');
+        
+        // Find size info
+        const sizeElement = container.querySelector('.aZw') ||
+                           container.querySelector('.yP');
+        
+        // Find download link
+        const downloadLink = container.querySelector('a[download]') ||
+                            container.querySelector('.aZp') ||
+                            container.querySelector('[aria-label*="Download"]');
+        
+        if (nameElement) {
+          const filename = nameElement.textContent?.trim() || 
+                          nameElement.getAttribute('aria-label')?.replace('Download ', '') ||
+                          'Unknown';
+          
+          const attachment = {
+            id: `attachment_${index}`,
+            filename: filename,
+            size: sizeElement ? sizeElement.textContent.trim() : 'Unknown',
+            downloadUrl: downloadLink ? downloadLink.href : null,
+            type: this.getFileType(filename),
+            canDownload: !!downloadLink
+          };
+          
+          attachments.push(attachment);
+        }
+      } catch (error) {
+        console.error(`Error processing attachment ${index}:`, error);
+      }
+    });
+    
+    return {
+      emailId,
+      attachments,
+      totalAttachments: attachments.length,
+      hasAttachments: attachments.length > 0
+    };
+  }
+
+  async downloadAttachment(emailId, attachmentId) {
+    console.log(`Downloading attachment ${attachmentId} from email ${emailId}`);
+    
+    // Get attachment info
+    const attachmentData = await this.getEmailAttachments(emailId);
+    
+    if (!attachmentData.hasAttachments) {
+      return { error: 'No attachments found in email' };
+    }
+    
+    const attachment = attachmentData.attachments.find(att => 
+      att.id === attachmentId || att.filename === attachmentId
+    );
+    
+    if (!attachment) {
+      return { error: 'Attachment not found' };
+    }
+    
+    if (!attachment.canDownload || !attachment.downloadUrl) {
+      return { error: 'Attachment cannot be downloaded' };
+    }
+    
+    try {
+      // Find the actual download element
+      const downloadElements = document.querySelectorAll('a[download], [aria-label*="Download"]');
+      let downloadElement = null;
+      
+      for (const elem of downloadElements) {
+        if (elem.href === attachment.downloadUrl || 
+            elem.textContent?.includes(attachment.filename) ||
+            elem.getAttribute('aria-label')?.includes(attachment.filename)) {
+          downloadElement = elem;
+          break;
+        }
+      }
+      
+      if (downloadElement) {
+        downloadElement.click();
+        
+        return {
+          success: true,
+          filename: attachment.filename,
+          size: attachment.size,
+          message: 'Download started'
+        };
+      } else {
+        // Create temporary download link as fallback
+        const tempLink = document.createElement('a');
+        tempLink.href = attachment.downloadUrl;
+        tempLink.download = attachment.filename;
+        tempLink.style.display = 'none';
+        document.body.appendChild(tempLink);
+        tempLink.click();
+        document.body.removeChild(tempLink);
+        
+        return {
+          success: true,
+          filename: attachment.filename,
+          size: attachment.size,
+          message: 'Download started via temporary link'
+        };
+      }
+      
+    } catch (error) {
+      return {
+        error: `Download failed: ${error.message}`,
+        filename: attachment.filename
+      };
+    }
+  }
+
+  getFileType(filename) {
+    const extension = filename.split('.').pop()?.toLowerCase();
+    
+    const typeMap = {
+      'pdf': 'document',
+      'doc': 'document',
+      'docx': 'document',
+      'txt': 'document',
+      'jpg': 'image',
+      'jpeg': 'image',
+      'png': 'image',
+      'gif': 'image',
+      'mp4': 'video',
+      'avi': 'video',
+      'mp3': 'audio',
+      'wav': 'audio',
+      'zip': 'archive',
+      'rar': 'archive',
+      'xlsx': 'spreadsheet',
+      'xls': 'spreadsheet',
+      'csv': 'spreadsheet',
+      'ppt': 'presentation',
+      'pptx': 'presentation'
+    };
+    
+    return typeMap[extension] || 'unknown';
   }
 }
 

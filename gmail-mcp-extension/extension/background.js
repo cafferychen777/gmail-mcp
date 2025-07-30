@@ -301,7 +301,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   
   // Handle Gmail action requests (from popup or native host)
-  if (request.action && ['getEmails', 'sendEmail', 'readEmail', 'replyEmail', 'composeReply', 'debugPage', 'searchEmails'].includes(request.action)) {
+  if (request.action && ['getEmails', 'sendEmail', 'readEmail', 'replyEmail', 'composeReply', 'debugPage', 'searchEmails', 'markEmailsRead', 'deleteEmails', 'archiveEmails', 'getEmailAttachments', 'downloadAttachment'].includes(request.action)) {
     // Check if this is from popup or native host
     const isFromPopup = !sender.tab;
     const requestId = request.id || Date.now();

@@ -95,6 +95,83 @@ class GmailMCPServer {
             },
             required: ['query']
           }
+        },
+        {
+          name: 'mark_emails_read',
+          description: 'Mark email(s) as read or unread',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              emailIds: { 
+                type: 'array', 
+                items: { type: 'string' },
+                description: 'Array of email IDs to mark' 
+              },
+              markAsRead: { 
+                type: 'boolean', 
+                description: 'true to mark as read, false to mark as unread' 
+              }
+            },
+            required: ['emailIds', 'markAsRead']
+          }
+        },
+        {
+          name: 'delete_emails',
+          description: 'Delete email(s)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              emailIds: { 
+                type: 'array', 
+                items: { type: 'string' },
+                description: 'Array of email IDs to delete' 
+              },
+              permanent: {
+                type: 'boolean',
+                description: 'true for permanent delete, false for move to trash',
+                default: false
+              }
+            },
+            required: ['emailIds']
+          }
+        },
+        {
+          name: 'archive_emails',
+          description: 'Archive email(s)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              emailIds: { 
+                type: 'array', 
+                items: { type: 'string' },
+                description: 'Array of email IDs to archive' 
+              }
+            },
+            required: ['emailIds']
+          }
+        },
+        {
+          name: 'get_email_attachments',
+          description: 'Get list of attachments in an email',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              emailId: { type: 'string', description: 'Email ID to check for attachments' }
+            },
+            required: ['emailId']
+          }
+        },
+        {
+          name: 'download_attachment',
+          description: 'Download an email attachment',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              emailId: { type: 'string', description: 'Email ID containing the attachment' },
+              attachmentId: { type: 'string', description: 'Attachment ID or filename' }
+            },
+            required: ['emailId', 'attachmentId']
+          }
         }
       ]
     }));
@@ -328,6 +405,247 @@ Search URL: ${searchData.url || 'https://mail.google.com'}`
                   content: [{
                     type: 'text',
                     text: `Search failed: ${result.error || 'Unknown error'}`
+                  }]
+                };
+              }
+            } catch (error) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `Error: ${error.message}`
+                }]
+              };
+            }
+
+          case 'mark_emails_read':
+            try {
+              const response = await fetch(`${bridgeUrl}/mcp/request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'markEmailsRead',
+                  params: {
+                    emailIds: args.emailIds,
+                    markAsRead: args.markAsRead
+                  }
+                })
+              });
+
+              const result = await response.json();
+
+              if (result.success && result.data) {
+                const { results, totalProcessed } = result.data;
+                const successCount = results.filter(r => r.success).length;
+                
+                return {
+                  content: [{
+                    type: 'text',
+                    text: `Marked ${successCount}/${totalProcessed} emails as ${args.markAsRead ? 'read' : 'unread'}
+
+${results.map(r => 
+  `${r.emailId}: ${r.success ? '✓' : '✗'} ${r.error || r.message || ''}`
+).join('\n')}`
+                  }]
+                };
+              } else {
+                return {
+                  content: [{
+                    type: 'text',
+                    text: `Error: ${result.error || 'Failed to mark emails'}`
+                  }]
+                };
+              }
+            } catch (error) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `Error: ${error.message}`
+                }]
+              };
+            }
+
+          case 'delete_emails':
+            try {
+              const response = await fetch(`${bridgeUrl}/mcp/request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'deleteEmails',
+                  params: {
+                    emailIds: args.emailIds,
+                    permanent: args.permanent || false
+                  }
+                })
+              });
+
+              const result = await response.json();
+
+              if (result.success && result.data) {
+                const { results, totalProcessed, action } = result.data;
+                const successCount = results.filter(r => r.success).length;
+                
+                return {
+                  content: [{
+                    type: 'text',
+                    text: `${action === 'permanently_deleted' ? 'Permanently deleted' : 'Moved to trash'} ${successCount}/${totalProcessed} emails
+
+${results.map(r => 
+  `${r.emailId}: ${r.success ? '✓' : '✗'} ${r.error || ''}`
+).join('\n')}`
+                  }]
+                };
+              } else {
+                return {
+                  content: [{
+                    type: 'text',
+                    text: `Error: ${result.error || 'Failed to delete emails'}`
+                  }]
+                };
+              }
+            } catch (error) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `Error: ${error.message}`
+                }]
+              };
+            }
+
+          case 'archive_emails':
+            try {
+              const response = await fetch(`${bridgeUrl}/mcp/request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'archiveEmails',
+                  params: {
+                    emailIds: args.emailIds
+                  }
+                })
+              });
+
+              const result = await response.json();
+
+              if (result.success && result.data) {
+                const { results, totalProcessed } = result.data;
+                const successCount = results.filter(r => r.success).length;
+                
+                return {
+                  content: [{
+                    type: 'text',
+                    text: `Archived ${successCount}/${totalProcessed} emails
+
+${results.map(r => 
+  `${r.emailId}: ${r.success ? '✓' : '✗'} ${r.error || ''}`
+).join('\n')}`
+                  }]
+                };
+              } else {
+                return {
+                  content: [{
+                    type: 'text',
+                    text: `Error: ${result.error || 'Failed to archive emails'}`
+                  }]
+                };
+              }
+            } catch (error) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `Error: ${error.message}`
+                }]
+              };
+            }
+
+          case 'get_email_attachments':
+            try {
+              const response = await fetch(`${bridgeUrl}/mcp/request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'getEmailAttachments',
+                  params: {
+                    emailId: args.emailId
+                  }
+                })
+              });
+
+              const result = await response.json();
+
+              if (result.success && result.data) {
+                const { emailId, attachments, totalAttachments, hasAttachments } = result.data;
+                
+                if (!hasAttachments) {
+                  return {
+                    content: [{
+                      type: 'text',
+                      text: `No attachments found in email ${emailId}`
+                    }]
+                  };
+                }
+                
+                return {
+                  content: [{
+                    type: 'text',
+                    text: `Found ${totalAttachments} attachment(s) in email ${emailId}:
+
+${attachments.map((att, index) => 
+  `${index + 1}. ${att.filename}
+   Type: ${att.type}
+   Size: ${att.size}
+   ID: ${att.id}
+   Downloadable: ${att.canDownload ? 'Yes' : 'No'}`
+).join('\n\n')}`
+                  }]
+                };
+              } else {
+                return {
+                  content: [{
+                    type: 'text',
+                    text: `Error: ${result.error || 'Failed to get attachments'}`
+                  }]
+                };
+              }
+            } catch (error) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `Error: ${error.message}`
+                }]
+              };
+            }
+
+          case 'download_attachment':
+            try {
+              const response = await fetch(`${bridgeUrl}/mcp/request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'downloadAttachment',
+                  params: {
+                    emailId: args.emailId,
+                    attachmentId: args.attachmentId
+                  }
+                })
+              });
+
+              const result = await response.json();
+
+              if (result.success && result.data) {
+                return {
+                  content: [{
+                    type: 'text',
+                    text: `Attachment download initiated:
+Filename: ${result.data.filename}
+Size: ${result.data.size}
+Status: ${result.data.message}`
+                  }]
+                };
+              } else {
+                return {
+                  content: [{
+                    type: 'text',
+                    text: `Error: ${result.error || result.data?.error || 'Failed to download attachment'}`
                   }]
                 };
               }
