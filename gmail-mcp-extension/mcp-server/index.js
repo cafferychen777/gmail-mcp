@@ -204,17 +204,26 @@ class GmailMCPServer {
               const result = await response.json();
               
               if (result.success) {
-                return { 
-                  content: [{ 
-                    type: 'text', 
-                    text: 'Reply draft created successfully. Please review and click Send in Gmail to send the email.'
-                  }] 
-                };
+                if (result.data?.sent) {
+                  return { 
+                    content: [{ 
+                      type: 'text', 
+                      text: 'Reply sent successfully!'
+                    }] 
+                  };
+                } else {
+                  return { 
+                    content: [{ 
+                      type: 'text', 
+                      text: 'Reply saved as draft. Please manually send in Gmail.'
+                    }] 
+                  };
+                }
               } else {
                 return { 
                   content: [{ 
                     type: 'text', 
-                    text: `Error: ${result.error || 'Failed to create reply draft'}`
+                    text: `Error: ${result.error || 'Failed to send reply'}`
                   }] 
                 };
               }
@@ -245,17 +254,26 @@ class GmailMCPServer {
               const result = await response.json();
               
               if (result.success) {
-                return { 
-                  content: [{ 
-                    type: 'text', 
-                    text: 'Email draft created successfully. Please review and click Send in Gmail to send the email.'
-                  }] 
-                };
+                if (result.data?.sent) {
+                  return { 
+                    content: [{ 
+                      type: 'text', 
+                      text: 'Email sent successfully!'
+                    }] 
+                  };
+                } else {
+                  return { 
+                    content: [{ 
+                      type: 'text', 
+                      text: 'Email saved as draft. Please manually send in Gmail.'
+                    }] 
+                  };
+                }
               } else {
                 return { 
                   content: [{ 
                     type: 'text', 
-                    text: `Error: ${result.error || 'Failed to create email draft'}`
+                    text: `Error: ${result.error || 'Failed to send email'}`
                   }] 
                 };
               }

@@ -425,12 +425,59 @@ class GmailInterface {
 
       console.log('Compose window opened and filled successfully');
       
-      return {
-        success: true,
-        message: 'Email compose window opened',
-        to: to,
-        subject: subject
-      };
+      // Wait a moment for Gmail to process all fields
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Find and click the send button
+      const sendButtonSelectors = [
+        '[aria-label*="Send"]',
+        '[data-tooltip*="Send"]',
+        'div[role="button"][aria-label*="Send"]',
+        '.T-I.J-J5-Ji.aoO.v7.T-I-atl.L3',
+        'div.dC > div.gU.Up > div > div.btA > div[role="button"]:nth-child(1)',
+        'div[data-tooltip-delay="800"]'
+      ];
+      
+      let sendButton = null;
+      for (const selector of sendButtonSelectors) {
+        const buttons = document.querySelectorAll(selector);
+        for (const button of buttons) {
+          // Check if it's visible and contains Send text/icon
+          if (button.offsetParent !== null && 
+              (button.textContent.includes('Send') || 
+               button.getAttribute('aria-label')?.includes('Send'))) {
+            sendButton = button;
+            console.log(`Found send button with selector: ${selector}`);
+            break;
+          }
+        }
+        if (sendButton) break;
+      }
+      
+      if (sendButton) {
+        console.log('Clicking send button...');
+        sendButton.click();
+        
+        // Wait for email to be sent
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        return {
+          success: true,
+          message: 'Email sent successfully',
+          to: to,
+          subject: subject,
+          sent: true
+        };
+      } else {
+        console.warn('Could not find send button, email saved as draft');
+        return {
+          success: true,
+          message: 'Email saved as draft (send button not found)',
+          to: to,
+          subject: subject,
+          sent: false
+        };
+      }
       
     } catch (error) {
       console.error('Error in sendEmail:', error);
@@ -550,11 +597,57 @@ class GmailInterface {
 
       console.log('Reply window opened and content filled successfully');
       
-      return {
-        success: true,
-        message: 'Reply compose window opened',
-        emailId: emailId
-      };
+      // Wait a moment for Gmail to process the content
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Find and click the send button
+      const sendButtonSelectors = [
+        '[aria-label*="Send"]',
+        '[data-tooltip*="Send"]',
+        'div[role="button"][aria-label*="Send"]',
+        '.T-I.J-J5-Ji.aoO.v7.T-I-atl.L3',
+        'div.dC > div.gU.Up > div > div.btA > div[role="button"]:nth-child(1)',
+        'div[data-tooltip-delay="800"]'
+      ];
+      
+      let sendButton = null;
+      for (const selector of sendButtonSelectors) {
+        const buttons = document.querySelectorAll(selector);
+        for (const button of buttons) {
+          // Check if it's visible and contains Send text/icon
+          if (button.offsetParent !== null && 
+              (button.textContent.includes('Send') || 
+               button.getAttribute('aria-label')?.includes('Send'))) {
+            sendButton = button;
+            console.log(`Found send button with selector: ${selector}`);
+            break;
+          }
+        }
+        if (sendButton) break;
+      }
+      
+      if (sendButton) {
+        console.log('Clicking send button...');
+        sendButton.click();
+        
+        // Wait for email to be sent
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        return {
+          success: true,
+          message: 'Reply sent successfully',
+          emailId: emailId,
+          sent: true
+        };
+      } else {
+        console.warn('Could not find send button, email saved as draft');
+        return {
+          success: true,
+          message: 'Reply saved as draft (send button not found)',
+          emailId: emailId,
+          sent: false
+        };
+      }
       
     } catch (error) {
       console.error('Error in composeReply:', error);
