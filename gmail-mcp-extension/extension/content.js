@@ -412,8 +412,9 @@ class GmailInterface {
 
         if (bodyField) {
           bodyField.focus();
-          // Use textContent for plain text
-          bodyField.textContent = body;
+          // Convert newlines to HTML breaks for proper formatting
+          const formattedBody = body.replace(/\n/g, '<br>');
+          bodyField.innerHTML = formattedBody;
           bodyField.dispatchEvent(new Event('input', { bubbles: true }));
           bodyField.dispatchEvent(new Event('change', { bubbles: true }));
           bodyField.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
@@ -533,8 +534,11 @@ class GmailInterface {
       
       // Set the reply content
       if (content) {
-        // Use textContent for plain text to avoid XSS issues
-        bodyField.textContent = content;
+        // Convert newlines to HTML breaks for proper formatting
+        const formattedContent = content.replace(/\n/g, '<br>');
+        
+        // Use innerHTML for formatted content (Gmail's compose uses contenteditable)
+        bodyField.innerHTML = formattedContent;
         
         // Trigger input events to ensure Gmail recognizes the change
         bodyField.dispatchEvent(new Event('input', { bubbles: true }));

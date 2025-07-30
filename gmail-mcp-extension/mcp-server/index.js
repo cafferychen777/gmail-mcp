@@ -207,14 +207,14 @@ class GmailMCPServer {
                 return { 
                   content: [{ 
                     type: 'text', 
-                    text: 'Reply window opened successfully'
+                    text: 'Reply draft created successfully. Please review and click Send in Gmail to send the email.'
                   }] 
                 };
               } else {
                 return { 
                   content: [{ 
                     type: 'text', 
-                    text: `Error: ${result.error || 'Failed to open reply window'}`
+                    text: `Error: ${result.error || 'Failed to create reply draft'}`
                   }] 
                 };
               }
@@ -248,14 +248,14 @@ class GmailMCPServer {
                 return { 
                   content: [{ 
                     type: 'text', 
-                    text: 'Email compose window opened successfully'
+                    text: 'Email draft created successfully. Please review and click Send in Gmail to send the email.'
                   }] 
                 };
               } else {
                 return { 
                   content: [{ 
                     type: 'text', 
-                    text: `Error: ${result.error || 'Failed to open compose window'}`
+                    text: `Error: ${result.error || 'Failed to create email draft'}`
                   }] 
                 };
               }
