@@ -365,8 +365,31 @@ class GmailInterface {
 
   async searchEmails(query, options = {}) {
     console.log(`Searching emails with query: ${query}`);
+    console.log('Search options:', options);
 
     const limit = options.limit || 10;
+
+    // Build the full search query with options
+    let fullQuery = query;
+    
+    // Add additional filters from options
+    if (options.from) {
+      fullQuery += ` from:${options.from}`;
+    }
+    if (options.subject) {
+      fullQuery += ` subject:${options.subject}`;
+    }
+    if (options.unread === true) {
+      fullQuery += ` is:unread`;
+    }
+    if (options.dateFrom) {
+      fullQuery += ` after:${options.dateFrom}`;
+    }
+    if (options.dateTo) {
+      fullQuery += ` before:${options.dateTo}`;
+    }
+
+    console.log('Full search query:', fullQuery);
 
     // Find the search box
     const searchBox = document.querySelector('input[aria-label*="Search"]') ||
@@ -377,21 +400,33 @@ class GmailInterface {
       throw new Error('Could not find search box');
     }
 
-    // Clear and enter search query
-    searchBox.value = query;
+    // Focus the search box first
+    searchBox.focus();
+    
+    // Clear existing value
+    searchBox.value = '';
+    
+    // Set new search query
+    searchBox.value = fullQuery;
     searchBox.dispatchEvent(new Event('input', { bubbles: true }));
 
-    // Press Enter or click search button
-    searchBox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    // Trigger search by simulating Enter key
+    const enterEvent = new KeyboardEvent('keydown', { 
+      key: 'Enter', 
+      keyCode: 13,
+      which: 13,
+      bubbles: true 
+    });
+    searchBox.dispatchEvent(enterEvent);
 
-    // Wait for search results
+    // Wait for search results to load
     await new Promise(resolve => setTimeout(resolve, 3000));
 
     // Get search results
     const emails = this.getEmailList().slice(0, limit);
 
     return {
-      query: query,
+      query: fullQuery,
       results: emails,
       count: emails.length,
       url: window.location.href

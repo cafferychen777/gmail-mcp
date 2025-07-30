@@ -302,7 +302,7 @@ ${emails.map((email, index) =>
    ${email.isUnread ? '📧 UNREAD' : '📖 Read'}
 `).join('\n')}
 
-Search URL: ${searchData.url || window.location.href}`
+Search URL: ${searchData.url || 'https://mail.google.com'}`
                   }]
                 };
               } else {
