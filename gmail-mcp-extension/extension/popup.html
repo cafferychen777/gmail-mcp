@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      width: 300px;
+      padding: 10px;
+      font-family: Arial, sans-serif;
+    }
+    .status {
+      padding: 10px;
+      border-radius: 5px;
+      margin: 10px 0;
+    }
+    .connected {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .disconnected {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .checking {
+      background-color: #fff3cd;
+      color: #856404;
+    }
+    button {
+      margin: 5px 0;
+      padding: 5px 10px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background: #f8f9fa;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #e9ecef;
+    }
+    button:disabled {
+      background: #e9ecef;
+      color: #6c757d;
+      cursor: not-allowed;
+    }
+    .test-results {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 5px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+    .test-results.loading {
+      background-color: #fff3cd;
+      color: #856404;
+    }
+    .test-results.success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .test-results.error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    code {
+      background: #f0f0f0;
+      padding: 2px 4px;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+    #setup-info {
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 5px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Gmail MCP Bridge</h2>
+  <div id="status" class="status disconnected">
+    Checking connection...
+  </div>
+  <div id="connection-details"></div>
+  <button id="refresh-connection">Refresh Status</button>
+
+  <p>This extension bridges Gmail with your MCP server.</p>
+
+  <div style="margin-top: 10px;">
+    <button id="test-emails">Test Get Emails</button>
+    <button id="test-send">Test Send Email</button>
+    <button id="test-search">Test Search Emails</button>
+    <button id="debug-page">Debug Gmail Page</button>
+  </div>
+  
+  <div id="test-results" style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 5px; display: none; max-height: 200px; overflow-y: auto;">
+    <pre id="results-content" style="margin: 0; font-size: 11px;"></pre>
+  </div>
+  
+  <button id="setup" style="margin-top: 10px;">Bridge Server Info</button>
+  <div id="setup-info" style="display: none;">
+    <p><strong>Extension ID:</strong></p>
+    <code id="extension-id"></code>
+    <p><strong>Bridge Server:</strong></p>
+    <code>http://localhost:3456</code>
+    <button id="copy-setup">Copy Start Command</button>
+    <div id="copy-status" style="color: green; display: none;">Copied!</div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

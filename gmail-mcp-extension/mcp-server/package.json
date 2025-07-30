@@ -1,0 +1,22 @@
+{
+  "name": "gmail-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Gmail via Chrome extension",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "bridge": "node bridge-server.js",
+    "dev": "node bridge-server.js & echo 'Bridge server started on http://localhost:3456'",
+    "test": "node ../test-integration.js",
+    "inspector": "npx @modelcontextprotocol/inspector index.js",
+    "test:cli": "npx @modelcontextprotocol/inspector --cli index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "uuid": "^9.0.0",
+    "node-fetch": "^3.3.0"
+  }
+}
