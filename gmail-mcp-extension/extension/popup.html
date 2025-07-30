@@ -2,119 +2,244 @@
 <html>
 <head>
   <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
     body {
-      width: 300px;
-      padding: 10px;
-      font-family: Arial, sans-serif;
+      width: 320px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f7f8fa;
     }
-    .status {
-      padding: 10px;
-      border-radius: 5px;
-      margin: 10px 0;
+    
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 24px 20px;
+      text-align: center;
     }
-    .connected {
-      background-color: #d4edda;
-      color: #155724;
+    
+    .header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
     }
-    .disconnected {
-      background-color: #f8d7da;
-      color: #721c24;
+    
+    .header .subtitle {
+      font-size: 13px;
+      opacity: 0.9;
     }
-    .checking {
-      background-color: #fff3cd;
-      color: #856404;
+    
+    .status-card {
+      background: white;
+      margin: 20px;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     }
-    button {
-      margin: 5px 0;
-      padding: 5px 10px;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-      background: #f8f9fa;
-      cursor: pointer;
+    
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
     }
-    button:hover {
-      background: #e9ecef;
+    
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      position: relative;
     }
-    button:disabled {
-      background: #e9ecef;
-      color: #6c757d;
-      cursor: not-allowed;
+    
+    .status-dot.connected {
+      background: #10b981;
     }
-    .test-results {
-      margin: 10px 0;
-      padding: 10px;
-      border-radius: 5px;
-      max-height: 200px;
-      overflow-y: auto;
-      font-family: monospace;
-      font-size: 12px;
-      white-space: pre-wrap;
+    
+    .status-dot.connected::after {
+      content: '';
+      position: absolute;
+      top: -4px;
+      left: -4px;
+      right: -4px;
+      bottom: -4px;
+      border-radius: 50%;
+      background: #10b981;
+      opacity: 0.3;
+      animation: pulse 2s ease-in-out infinite;
     }
-    .test-results.loading {
-      background-color: #fff3cd;
-      color: #856404;
+    
+    .status-dot.disconnected {
+      background: #ef4444;
     }
-    .test-results.success {
-      background-color: #d4edda;
-      color: #155724;
+    
+    .status-dot.checking {
+      background: #f59e0b;
     }
-    .test-results.error {
-      background-color: #f8d7da;
-      color: #721c24;
+    
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+        opacity: 0.3;
+      }
+      50% {
+        transform: scale(1.2);
+        opacity: 0.1;
+      }
+      100% {
+        transform: scale(1);
+        opacity: 0.3;
+      }
     }
-    code {
-      background: #f0f0f0;
+    
+    .status-text {
+      font-size: 16px;
+      font-weight: 500;
+      color: #1f2937;
+    }
+    
+    .status-details {
+      font-size: 13px;
+      color: #6b7280;
+      line-height: 1.5;
+    }
+    
+    .help-section {
+      background: #f3f4f6;
+      margin: 0 20px 20px 20px;
+      padding: 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #4b5563;
+    }
+    
+    .help-section h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 8px;
+    }
+    
+    .help-section ol {
+      margin-left: 20px;
+      line-height: 1.6;
+    }
+    
+    .help-section code {
+      background: #e5e7eb;
       padding: 2px 4px;
       border-radius: 3px;
-      font-family: monospace;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 12px;
     }
-    #setup-info {
-      background: #f8f9fa;
-      padding: 10px;
-      border-radius: 5px;
-      margin-top: 10px;
+    
+    .refresh-btn {
+      background: white;
+      border: 1px solid #e5e7eb;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #4b5563;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .refresh-btn:hover {
+      background: #f9fafb;
+      border-color: #d1d5db;
+    }
+    
+    .refresh-btn:active {
+      transform: scale(0.98);
+    }
+    
+    .refresh-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+    
+    .rotating {
+      animation: rotate 1s linear infinite;
+    }
+    
+    @keyframes rotate {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    
+    .footer {
+      text-align: center;
+      padding: 16px;
+      font-size: 12px;
+      color: #9ca3af;
+    }
+    
+    .footer a {
+      color: #6366f1;
+      text-decoration: none;
+    }
+    
+    .footer a:hover {
+      text-decoration: underline;
+    }
+    
+    .gmail-icon {
+      width: 24px;
+      height: 24px;
     }
   </style>
 </head>
 <body>
-  <h2>Gmail MCP Bridge</h2>
-  <div id="status" class="status disconnected">
-    Checking connection...
-  </div>
-  <div id="connection-details"></div>
-  <button id="refresh-connection">Refresh Status</button>
-
-  <p>This extension bridges Gmail with your MCP server.</p>
-
-  <div style="margin-top: 10px;">
-    <button id="test-emails">Test Get Emails</button>
-    <button id="test-send">Test Send Email</button>
-    <button id="test-search">Test Search Emails</button>
+  <div class="header">
+    <h1>
+      <svg class="gmail-icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/>
+      </svg>
+      Gmail MCP Bridge
+    </h1>
+    <div class="subtitle">Connect Gmail with Claude</div>
   </div>
   
-  <details style="margin-top: 10px;">
-    <summary style="cursor: pointer; user-select: none;">Advanced Tools</summary>
-    <div style="margin-top: 10px; padding-left: 10px;">
-      <button id="inject-script">Force Inject Content Script</button>
-      <button id="debug-page">Debug Gmail Page</button>
-      <p style="font-size: 11px; color: #666; margin-top: 5px;">
-        Note: Content scripts are automatically injected. Use "Force Inject" only if experiencing issues.
-      </p>
+  <div class="status-card">
+    <div class="status-indicator">
+      <div id="status-dot" class="status-dot checking"></div>
+      <div id="status-text" class="status-text">Checking connection...</div>
     </div>
-  </details>
-  
-  <div id="test-results" style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 5px; display: none; max-height: 200px; overflow-y: auto;">
-    <pre id="results-content" style="margin: 0; font-size: 11px;"></pre>
+    <div id="status-details" class="status-details"></div>
+    
+    <button id="refresh-btn" class="refresh-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3.68 11.12h-.01m.01 0A8.32 8.32 0 0112 3.68a8.32 8.32 0 018.32 8.32m-16.64 0v-4m0 4h4m12.64.88h.01m-.01 0A8.32 8.32 0 0112 20.32a8.32 8.32 0 01-8.32-8.32m16.64 0v4m0-4h-4"/>
+      </svg>
+      <span>Refresh</span>
+    </button>
   </div>
   
-  <button id="setup" style="margin-top: 10px;">Bridge Server Info</button>
-  <div id="setup-info" style="display: none;">
-    <p><strong>Extension ID:</strong></p>
-    <code id="extension-id"></code>
-    <p><strong>Bridge Server:</strong></p>
-    <code>http://localhost:3456</code>
-    <button id="copy-setup">Copy Start Command</button>
-    <div id="copy-status" style="color: green; display: none;">Copied!</div>
+  <div id="help-section" class="help-section" style="display: none;">
+    <h3>Quick Setup</h3>
+    <ol>
+      <li>Open terminal and run:<br><code>cd ~/CascadeProjects/gmail-mcp/gmail-mcp-extension/mcp-server</code></li>
+      <li>Start the bridge server:<br><code>npm run bridge</code></li>
+      <li>Keep Gmail open in a tab</li>
+    </ol>
+  </div>
+  
+  <div class="footer">
+    <a href="https://github.com/cafferychen777/gmail-mcp" target="_blank">View on GitHub</a>
   </div>
   
   <script src="popup.js"></script>
