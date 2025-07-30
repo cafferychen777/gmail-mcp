@@ -281,85 +281,280 @@ class GmailInterface {
 
   async sendEmail(to, subject, body) {
     console.log('Opening compose window for new email...');
+    console.log('To:', to, 'Subject:', subject);
 
-    // Click the compose button
-    const composeButton = document.querySelector('[gh="cm"]') ||
-                         document.querySelector('div[role="button"][gh="cm"]') ||
-                         document.querySelector('.T-I.T-I-KE.L3');
+    try {
+      // Find compose button with multiple selectors
+      const composeSelectors = [
+        '[gh="cm"]',
+        'div[role="button"][gh="cm"]',
+        '.T-I.T-I-KE.L3',
+        '.z0 > .L3',  // Compose button in Gmail
+        'div.T-I.T-I-KE'
+      ];
 
-    if (composeButton) {
+      let composeButton = null;
+      for (const selector of composeSelectors) {
+        composeButton = document.querySelector(selector);
+        if (composeButton && composeButton.offsetParent !== null) {
+          console.log(`Found compose button with selector: ${selector}`);
+          break;
+        }
+      }
+
+      if (!composeButton) {
+        throw new Error('Could not find compose button. Make sure you are on Gmail inbox.');
+      }
+
+      // Click compose button
       composeButton.click();
+      console.log('Compose button clicked');
 
-      // Wait for compose window to open
+      // Wait for compose window to fully load
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Fill in the fields
+      // Fill in the To field
       if (to) {
-        const toField = document.querySelector('textarea[name="to"]') ||
-                       document.querySelector('[aria-label*="To"]');
+        const toSelectors = [
+          'textarea[name="to"]',
+          'input[name="to"]',
+          '[aria-label*="To"][role="combobox"]',
+          '[aria-label="To"]',
+          'div[name="to"]'
+        ];
+
+        let toField = null;
+        for (const selector of toSelectors) {
+          toField = document.querySelector(selector);
+          if (toField) {
+            console.log(`Found To field with selector: ${selector}`);
+            break;
+          }
+        }
+
         if (toField) {
+          toField.focus();
           toField.value = to;
           toField.dispatchEvent(new Event('input', { bubbles: true }));
+          toField.dispatchEvent(new Event('change', { bubbles: true }));
+          // Tab to next field
+          toField.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+        } else {
+          console.warn('Could not find To field');
         }
       }
 
+      // Small delay between fields
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Fill in the Subject field
       if (subject) {
-        const subjectField = document.querySelector('input[name="subjectbox"]') ||
-                            document.querySelector('[aria-label*="Subject"]');
+        const subjectSelectors = [
+          'input[name="subjectbox"]',
+          'input[name="subject"]',
+          '[aria-label="Subject"]',
+          'input[placeholder*="Subject"]'
+        ];
+
+        let subjectField = null;
+        for (const selector of subjectSelectors) {
+          subjectField = document.querySelector(selector);
+          if (subjectField) {
+            console.log(`Found Subject field with selector: ${selector}`);
+            break;
+          }
+        }
+
         if (subjectField) {
+          subjectField.focus();
           subjectField.value = subject;
           subjectField.dispatchEvent(new Event('input', { bubbles: true }));
+          subjectField.dispatchEvent(new Event('change', { bubbles: true }));
+        } else {
+          console.warn('Could not find Subject field');
         }
       }
 
+      // Small delay before body
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Fill in the Body field
       if (body) {
-        const bodyField = document.querySelector('[aria-label*="Message body"]') ||
-                         document.querySelector('div[role="textbox"]');
+        const bodySelectors = [
+          '[aria-label="Message Body"]',
+          '[aria-label*="Message body"]',
+          'div[role="textbox"][aria-label*="Message"]',
+          'div[contenteditable="true"][role="textbox"]',
+          '.Am.Al.editable',
+          '.editable[contenteditable="true"]'
+        ];
+
+        let bodyField = null;
+        let attempts = 0;
+        const maxAttempts = 5;
+
+        // Try multiple times as compose area might load slowly
+        while (!bodyField && attempts < maxAttempts) {
+          for (const selector of bodySelectors) {
+            bodyField = document.querySelector(selector);
+            if (bodyField && bodyField.offsetParent !== null) {
+              console.log(`Found Body field with selector: ${selector}`);
+              break;
+            }
+          }
+          
+          if (!bodyField) {
+            attempts++;
+            console.log(`Body field not found, attempt ${attempts}/${maxAttempts}`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+
         if (bodyField) {
-          bodyField.innerHTML = body;
+          bodyField.focus();
+          // Use textContent for plain text
+          bodyField.textContent = body;
           bodyField.dispatchEvent(new Event('input', { bubbles: true }));
+          bodyField.dispatchEvent(new Event('change', { bubbles: true }));
+          bodyField.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+        } else {
+          console.warn('Could not find Body field after multiple attempts');
         }
       }
 
-      console.log('Compose window opened and filled');
-    } else {
-      throw new Error('Could not find compose button');
+      console.log('Compose window opened and filled successfully');
+      
+      return {
+        success: true,
+        message: 'Email compose window opened',
+        to: to,
+        subject: subject
+      };
+      
+    } catch (error) {
+      console.error('Error in sendEmail:', error);
+      throw error;
     }
   }
 
   async composeReply(emailId, content) {
     console.log(`Composing reply for email ${emailId}`);
+    console.log('Reply content:', content);
 
-    // First, make sure the email is open
-    await this.getEmailContent(emailId);
+    try {
+      // First, make sure the email is open
+      const emailData = await this.getEmailContent(emailId);
+      
+      if (!emailData || emailData.error) {
+        throw new Error(`Failed to open email: ${emailData?.error || 'Unknown error'}`);
+      }
 
-    // Wait a moment for the email to be fully loaded
-    await new Promise(resolve => setTimeout(resolve, 1000));
+      // Wait for email to be fully loaded
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
-    // Look for reply button
-    const replyButton = document.querySelector('[aria-label*="Reply"]') ||
-                       document.querySelector('[data-tooltip*="Reply"]') ||
-                       document.querySelector('.T-I.J-J5-Ji.T-I-Js-Gs.aaq.T-I-ax7.L3');
+      // Look for reply button with multiple selectors
+      const replySelectors = [
+        '[aria-label*="Reply"]',
+        '[data-tooltip*="Reply"]',
+        'div[role="button"][aria-label*="Reply"]',
+        'span[role="button"][aria-label*="Reply"]',
+        '.ams.bkH',  // Gmail's reply button class
+        '.T-I.J-J5-Ji.T-I-Js-Gs.aaq.T-I-ax7.L3'
+      ];
 
-    if (replyButton) {
-      replyButton.click();
-
-      // Wait for reply window to open
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Fill in the reply content
-      if (content) {
-        const bodyField = document.querySelector('[aria-label*="Message body"]') ||
-                         document.querySelector('div[role="textbox"]');
-        if (bodyField) {
-          bodyField.innerHTML = content;
-          bodyField.dispatchEvent(new Event('input', { bubbles: true }));
+      let replyButton = null;
+      for (const selector of replySelectors) {
+        replyButton = document.querySelector(selector);
+        if (replyButton && replyButton.offsetParent !== null) { // Check if visible
+          console.log(`Found reply button with selector: ${selector}`);
+          break;
         }
       }
 
-      console.log('Reply window opened and filled');
-    } else {
-      throw new Error('Could not find reply button');
+      if (!replyButton) {
+        // Try to find reply button in the email actions area
+        const actionsArea = document.querySelector('.iN') || document.querySelector('.btb');
+        if (actionsArea) {
+          replyButton = actionsArea.querySelector('[role="button"]');
+        }
+      }
+
+      if (!replyButton) {
+        throw new Error('Could not find reply button. Make sure the email is open.');
+      }
+
+      // Click the reply button
+      replyButton.click();
+      console.log('Reply button clicked');
+
+      // Wait for reply compose area to appear
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Find the compose area - it might be in different states
+      const composeSelectors = [
+        '[aria-label="Message Body"]',
+        '[aria-label*="Message body"]',
+        'div[role="textbox"][aria-label*="Message"]',
+        'div[contenteditable="true"][role="textbox"]',
+        '.Am.Al.editable',
+        '.editable[contenteditable="true"]'
+      ];
+
+      let bodyField = null;
+      let attempts = 0;
+      const maxAttempts = 5;
+
+      // Try multiple times as compose area might load slowly
+      while (!bodyField && attempts < maxAttempts) {
+        for (const selector of composeSelectors) {
+          bodyField = document.querySelector(selector);
+          if (bodyField && bodyField.offsetParent !== null) {
+            console.log(`Found compose field with selector: ${selector}`);
+            break;
+          }
+        }
+        
+        if (!bodyField) {
+          attempts++;
+          console.log(`Compose field not found, attempt ${attempts}/${maxAttempts}`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      if (!bodyField) {
+        throw new Error('Could not find reply compose field after opening reply window');
+      }
+
+      // Focus the field first
+      bodyField.focus();
+      
+      // Clear any existing content
+      bodyField.innerHTML = '';
+      
+      // Set the reply content
+      if (content) {
+        // Use textContent for plain text to avoid XSS issues
+        bodyField.textContent = content;
+        
+        // Trigger input events to ensure Gmail recognizes the change
+        bodyField.dispatchEvent(new Event('input', { bubbles: true }));
+        bodyField.dispatchEvent(new Event('change', { bubbles: true }));
+        
+        // Also trigger a keyup event
+        bodyField.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+      }
+
+      console.log('Reply window opened and content filled successfully');
+      
+      return {
+        success: true,
+        message: 'Reply compose window opened',
+        emailId: emailId
+      };
+      
+    } catch (error) {
+      console.error('Error in composeReply:', error);
+      throw error;
     }
   }
 
