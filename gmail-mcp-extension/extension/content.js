@@ -4,11 +4,15 @@ console.log('URL:', window.location.href);
 console.log('Document ready state:', document.readyState);
 console.log('Chrome runtime available:', typeof chrome !== 'undefined' && !!chrome.runtime);
 
-// Prevent duplicate execution
+// Prevent duplicate execution - but allow re-injection
 if (window.gmailMcpBridgeLoaded) {
-  console.log('Gmail MCP Bridge already loaded, skipping');
-} else {
-  window.gmailMcpBridgeLoaded = true;
+  console.log('Gmail MCP Bridge already loaded, cleaning up old instance');
+  // Clean up old listener if exists
+  if (window.gmailInterface) {
+    window.gmailInterface = null;
+  }
+}
+window.gmailMcpBridgeLoaded = true;
 
 // Wait for DOM to be fully ready
 function initializeWhenReady() {
@@ -24,16 +28,292 @@ function initializeWhenReady() {
 function initializeGmailInterface() {
   console.log('Initializing Gmail Interface...');
 
-class GmailInterface {
+  class GmailInterface {
   constructor() {
     console.log('GmailInterface constructor called');
     this.observer = null;
+    this.accountInfo = null;  // 新增：账号信息
+    this.tabId = null;        // 新增：标签页ID
     this.init();
   }
 
-  init() {
+  async init() {
     console.log('Gmail MCP Bridge initialized');
+    await this.detectAccount();     // 新增：检测账号
     this.setupListeners();
+    this.registerWithBackground();  // 新增：注册到background
+  }
+
+  // 新增方法：检测当前Gmail账号
+  async detectAccount() {
+    console.log('Detecting Gmail account...');
+    
+    let accountEmail = null;
+    let accountName = null;
+    
+    // Wait for page to load elements
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // 方法1: 从Gmail头部账号按钮获取（最可靠）
+    const accountButton = document.querySelector('[aria-label*="Google Account"]') ||
+                         document.querySelector('[gb-version] [role="button"] img[src*="googleusercontent"]')?.parentElement ||
+                         document.querySelector('a[aria-label*="Google Account"]');
+    
+    if (accountButton) {
+      const ariaLabel = accountButton.getAttribute('aria-label') || '';
+      const emailMatch = ariaLabel.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+      if (emailMatch) {
+        accountEmail = emailMatch[1];
+        console.log('Found email from account button:', accountEmail);
+      }
+    }
+    
+    // 方法2: 从Gmail界面元素获取
+    if (!accountEmail) {
+      const accountSelectors = [
+        // Google账号信息区域 - 更精确的选择器
+        'div[data-ogsr-up] [data-email]',
+        'div[aria-label*="@gmail.com"]',
+        'div[aria-label*="@googlemail.com"]',
+        '[data-hovercard-id]',
+        // Gmail特定选择器
+        '.gb_rb',  // Account info container
+        '.gb_sb',  // Account email element
+        '.gb_tb',  // Account name element
+        // 账号切换器
+        'div[data-identifier]'
+      ];
+
+      for (const selector of accountSelectors) {
+        const elements = document.querySelectorAll(selector);
+        for (const element of elements) {
+          // 尝试获取邮箱
+          const dataEmail = element.getAttribute('data-email') || 
+                          element.getAttribute('data-identifier') ||
+                          element.getAttribute('data-hovercard-id') ||
+                          element.getAttribute('aria-label') ||
+                          element.textContent?.trim();
+          
+          // 验证是否为有效邮箱并清理格式
+          if (dataEmail && dataEmail.includes('@')) {
+            // 提取邮箱地址（去除多余文本）
+            const emailMatch = dataEmail.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+            if (emailMatch) {
+              accountEmail = emailMatch[1];
+              console.log(`Found account email via ${selector}:`, accountEmail);
+              break;
+            }
+          }
+        }
+        if (accountEmail) break;
+      }
+    }
+
+    // 方法3: 从URL参数获取账号索引
+    const urlParams = new URLSearchParams(window.location.search);
+    const authUser = urlParams.get('authuser');
+    let accountIndex = authUser || '0';
+
+    // 方法4: 从页面标题提取
+    if (!accountEmail && document.title) {
+      const titleMatch = document.title.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+      if (titleMatch) {
+        accountEmail = titleMatch[1];
+        console.log('Found email from page title:', accountEmail);
+      }
+    }
+
+    // 方法5: 尝试点击账号按钮获取信息（需要更多时间）
+    if (!accountEmail) {
+      const accountIcon = document.querySelector('a[aria-label*="Google Account"] img') ||
+                         document.querySelector('[role="button"] img[src*="googleusercontent"]');
+      if (accountIcon) {
+        // 获取账号图标的父元素，可能包含账号信息
+        const parent = accountIcon.closest('[aria-label]') || accountIcon.parentElement;
+        if (parent) {
+          const ariaLabel = parent.getAttribute('aria-label') || '';
+          const emailMatch = ariaLabel.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+          if (emailMatch) {
+            accountEmail = emailMatch[1];
+            console.log('Found email from account icon parent:', accountEmail);
+          }
+        }
+      }
+    }
+
+    // 方法6: 使用MutationObserver等待动态加载的元素
+    if (!accountEmail) {
+      await new Promise((resolve) => {
+        let attempts = 0;
+        const maxAttempts = 5;
+        
+        const checkForEmail = () => {
+          attempts++;
+          
+          // 再次尝试所有方法
+          const dynamicSelectors = [
+            '[data-email]',
+            '[aria-label*="@gmail.com"]',
+            'div[data-identifier]'
+          ];
+          
+          for (const selector of dynamicSelectors) {
+            const element = document.querySelector(selector);
+            if (element) {
+              const text = element.getAttribute('data-email') || 
+                         element.getAttribute('data-identifier') ||
+                         element.getAttribute('aria-label') ||
+                         element.textContent;
+              if (text && text.includes('@')) {
+                const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+                if (emailMatch) {
+                  accountEmail = emailMatch[1];
+                  console.log(`Found email dynamically via ${selector}:`, accountEmail);
+                  resolve();
+                  return;
+                }
+              }
+            }
+          }
+          
+          if (attempts < maxAttempts) {
+            setTimeout(checkForEmail, 1000);
+          } else {
+            resolve();
+          }
+        };
+        
+        checkForEmail();
+      });
+    }
+
+    // 获取当前视图状态
+    const viewState = this.detectViewState();
+    
+    // 生成账号信息
+    this.accountInfo = {
+      email: accountEmail || `account_${accountIndex}`,
+      name: accountName || (accountEmail ? accountEmail.split('@')[0] : 'Unknown User'),
+      index: accountIndex,
+      url: window.location.href,
+      viewState: viewState,  // 新增：当前视图状态
+      timestamp: new Date().toISOString(),
+      detectionMethod: accountEmail ? 'dom_extraction' : 'url_parameter'
+    };
+
+    console.log('Detected account info:', this.accountInfo);
+  }
+
+  // 新增方法：检测当前Gmail视图状态
+  detectViewState() {
+    const hash = window.location.hash;
+    const url = window.location.href;
+    
+    // 优先检查URL hash来确定基础视图（撰写窗口可能覆盖在任何视图上）
+    if (hash.includes('#inbox')) return 'inbox';
+    if (hash.includes('#sent')) return 'sent';
+    if (hash.includes('#drafts')) return 'drafts';
+    if (hash.includes('#imp')) return 'important';
+    if (hash.includes('#starred')) return 'starred';
+    if (hash.includes('#snoozed')) return 'snoozed';
+    if (hash.includes('#all')) return 'all';
+    if (hash.includes('#spam')) return 'spam';
+    if (hash.includes('#trash')) return 'trash';
+    if (hash.includes('#search')) return 'search';
+    if (hash.includes('#label')) return 'label';
+    if (hash.includes('#category')) return 'category';
+    
+    // 检查是否在查看特定邮件
+    if (hash.match(/#[a-zA-Z]+\/[a-f0-9]+$/)) return 'email';
+    
+    // 只有当没有其他视图时才返回compose（撰写窗口是覆盖层，不是独立视图）
+    // 注意：撰写窗口可以在任何视图上打开
+    if (!hash || hash === '#' || hash === '') {
+      if (document.querySelector('.z0')) return 'compose';
+    }
+    
+    // 默认返回unknown
+    return 'unknown';
+  }
+
+  // 新增方法：向background script注册账号
+  registerWithBackground() {
+    chrome.runtime.sendMessage({
+      action: 'registerAccount',
+      accountInfo: this.accountInfo
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('Failed to register account:', chrome.runtime.lastError.message);
+      } else {
+        console.log('Account registered successfully:', response);
+      }
+    });
+  }
+
+  // 新增方法：获取账号信息
+  getAccountInfo() {
+    // 更新视图状态再返回
+    this.accountInfo.viewState = this.detectViewState();
+    this.accountInfo.lastActivity = Date.now();
+    return this.accountInfo;
+  }
+  
+  // 新增方法：更新视图状态并通知background
+  updateViewState() {
+    const newViewState = this.detectViewState();
+    if (this.accountInfo.viewState !== newViewState) {
+      this.accountInfo.viewState = newViewState;
+      this.accountInfo.lastActivity = Date.now();
+      
+      // 通知background script视图状态已改变
+      chrome.runtime.sendMessage({
+        action: 'updateAccountState',
+        accountInfo: this.accountInfo
+      });
+      
+      console.log('View state changed to:', newViewState);
+    }
+  }
+  
+  // 新增方法：切换到指定视图
+  async switchToView(targetView = 'inbox') {
+    console.log(`Switching to ${targetView} view...`);
+    const currentView = this.detectViewState();
+    
+    if (currentView === targetView) {
+      console.log(`Already in ${targetView} view`);
+      return true;
+    }
+    
+    // 构建目标URL
+    const currentUrl = new URL(window.location.href);
+    currentUrl.hash = `#${targetView}`;
+    
+    // 导航到目标视图
+    window.location.href = currentUrl.toString();
+    
+    // 等待页面加载
+    await new Promise(resolve => {
+      let attempts = 0;
+      const checkInterval = setInterval(() => {
+        attempts++;
+        const newView = this.detectViewState();
+        
+        if (newView === targetView || attempts > 10) {
+          clearInterval(checkInterval);
+          if (newView === targetView) {
+            console.log(`Successfully switched to ${targetView} view`);
+            this.updateViewState();
+            resolve(true);
+          } else {
+            console.error(`Failed to switch to ${targetView} view after ${attempts} attempts`);
+            resolve(false);
+          }
+        }
+      }, 500);
+    });
+    
+    return this.detectViewState() === targetView;
   }
 
   setupListeners() {
@@ -53,9 +333,17 @@ class GmailInterface {
 
           switch (request.action) {
             case 'getEmails':
-              const emails = this.getEmailList();
-              console.log('Found emails:', emails);
-              responseData = { emails };
+              const emailResult = this.getEmailList();
+              console.log('Email list result:', emailResult);
+              // 兼容旧格式和新格式
+              if (emailResult.emails) {
+                responseData = emailResult;
+              } else if (Array.isArray(emailResult)) {
+                // 旧格式兼容
+                responseData = { emails: emailResult };
+              } else {
+                responseData = { emails: [], error: 'Failed to get email list' };
+              }
               break;
 
             case 'getEmailContent':
@@ -117,17 +405,63 @@ class GmailInterface {
               responseData = await this.downloadAttachment(downloadEmailId, attachmentId);
               break;
 
+            case 'getAccountInfo':
+              responseData = this.getAccountInfo();
+              break;
+
+            case 'refreshAccount':
+              await this.detectAccount();
+              this.registerWithBackground();
+              responseData = { success: true, accountInfo: this.accountInfo };
+              break;
+              
+            case 'switchView':
+              const targetView = request.params?.view || 'inbox';
+              const switchSuccess = await this.switchToView(targetView);
+              responseData = { 
+                success: switchSuccess, 
+                currentView: this.detectViewState() 
+              };
+              break;
+
             default:
               responseData = { error: 'Unknown action' };
           }
 
-          // Send response directly using sendResponse
-          console.log('Sending response:', responseData);
-          sendResponse(responseData);
+          // Check if this is a bridge request (has an ID)
+          if (request.id) {
+            console.log(`Sending bridge response for request ${request.id}:`, responseData);
+            // For bridge requests, send the response back via runtime.sendMessage
+            chrome.runtime.sendMessage({
+              id: request.id,
+              response: responseData
+            }, (ack) => {
+              if (chrome.runtime.lastError) {
+                console.error('Failed to send bridge response:', chrome.runtime.lastError);
+              } else {
+                console.log('Bridge response sent successfully');
+              }
+            });
+            // Also send via sendResponse for compatibility
+            sendResponse(responseData);
+          } else {
+            // Regular response for non-bridge requests
+            console.log('Sending regular response:', responseData);
+            sendResponse(responseData);
+          }
 
         } catch (error) {
           console.error('Error processing request:', error);
           const errorResponse = { error: error.message };
+          
+          // Check if this is a bridge request
+          if (request.id) {
+            console.log(`Sending bridge error response for request ${request.id}`);
+            chrome.runtime.sendMessage({
+              id: request.id,
+              response: errorResponse
+            });
+          }
           sendResponse(errorResponse);
         }
       })();
@@ -258,37 +592,159 @@ class GmailInterface {
 
   getEmailList() {
     console.log('Getting email list...');
+    const currentView = this.detectViewState();
+    console.log('Current view:', currentView);
+    console.log('Current URL:', window.location.href);
+    
+    // 检查是否有撰写窗口打开（但不阻止获取邮件列表）
+    const hasComposeWindow = document.querySelector('.z0') !== null;
+    if (hasComposeWindow) {
+      console.log('Note: Compose window is open but will still try to get email list');
+    }
+    
+    // 检查是否在合适的视图
+    const suitableViews = ['inbox', 'all', 'sent', 'drafts', 'starred', 'important'];
+    const problematicViews = ['search', 'label', 'category'];
+
+    if (!suitableViews.includes(currentView)) {
+      console.warn(`Not in a suitable view for email listing (current: ${currentView})`);
+
+      // 对于搜索视图，提供特殊处理
+      if (problematicViews.includes(currentView)) {
+        console.log(`Detected ${currentView} view, attempting to switch to inbox...`);
+
+        // 尝试自动切换到收件箱（非阻塞）
+        this.switchToView('inbox').then(success => {
+          if (success) {
+            console.log('Successfully switched to inbox view');
+          } else {
+            console.warn('Failed to switch to inbox view');
+          }
+        }).catch(error => {
+          console.error('Error switching to inbox view:', error);
+        });
+
+        return {
+          emails: [],
+          error: `Currently in ${currentView} view. Attempting to switch to inbox. Please try again in a moment.`,
+          currentView: currentView,
+          autoSwitching: true,
+          suggestion: 'Wait a moment and try again, or manually navigate to inbox'
+        };
+      }
+
+      // 对于其他不支持的视图
+      return {
+        emails: [],
+        error: `Cannot list emails in ${currentView} view. Please switch to inbox.`,
+        currentView: currentView,
+        supportedViews: suitableViews
+      };
+    }
+    
     const emails = [];
 
-    // Find all email rows in the current view
-    const emailRows = document.querySelectorAll('tr.zA');
-    console.log(`Found ${emailRows.length} email rows`);
+    // 尝试多种选择器，Gmail可能使用不同的结构
+    const selectors = [
+      'tr.zA',  // 标准邮件行（最常见）
+      'div[role="main"] tr[jsaction]',  // 备用选择器
+      'tbody tr[class*="z"]',  // 更宽泛的选择器
+      'div[gh="tl"] tr',  // 邮件列表容器
+      'table.F tbody tr.zA',  // 完整路径
+      'div[role="list"] > div[role="listitem"]',  // 新版Gmail可能使用
+      'tr[jsaction*="email"]',  // 包含email action的行
+      'div.Cp tbody tr'  // 另一种可能的容器
+    ];
+    
+    let emailRows = null;
+    for (const selector of selectors) {
+      emailRows = document.querySelectorAll(selector);
+      if (emailRows.length > 0) {
+        console.log(`Found ${emailRows.length} email rows using selector: ${selector}`);
+        break;
+      }
+    }
+    
+    if (!emailRows || emailRows.length === 0) {
+      console.log('No email rows found with any selector');
+      
+      // 调试：查找页面上所有可能包含邮件的元素
+      console.log('Debug: Looking for any elements with thread IDs...');
+      const threadElements = document.querySelectorAll('[data-legacy-thread-id], [data-thread-id], [data-message-id]');
+      console.log(`Found ${threadElements.length} elements with thread/message IDs`);
+      
+      // 检查是否是空收件箱
+      const emptyInboxIndicators = [
+        document.querySelector('.aRv'),  // "没有邮件"消息
+        document.querySelector('.TD'),   // 空状态容器
+        document.querySelector('[aria-label*="No conversations"]'),
+        document.querySelector('[aria-label*="没有对话"]')
+      ];
+      
+      const isEmptyInbox = emptyInboxIndicators.some(el => el && el.offsetParent !== null);
+      
+      if (isEmptyInbox) {
+        console.log('Inbox appears to be empty (found empty inbox indicator)');
+        return {
+          emails: [],
+          totalCount: 0,
+          currentView: currentView,
+          isEmpty: true,
+          message: 'Inbox is empty'
+        };
+      }
+      
+      return {
+        emails: [],
+        error: 'No emails found in current view',
+        currentView: currentView,
+        debugInfo: {
+          threadElementsFound: threadElements.length,
+          isEmptyInbox: isEmptyInbox
+        }
+      };
+    }
 
     emailRows.forEach((row, index) => {
       try {
-        // Find the span with thread ID
+        // Find the span with thread ID - 这是最可靠的标识符
         const threadSpan = row.querySelector('span[data-legacy-thread-id]');
-        if (!threadSpan) return;
+        if (!threadSpan) {
+          // 尝试其他方式获取ID
+          const idElement = row.querySelector('[data-thread-id]') || 
+                          row.querySelector('[data-message-id]');
+          if (!idElement) return;
+        }
 
-        const threadId = threadSpan.getAttribute('data-legacy-thread-id');
-        const subject = threadSpan.textContent.trim();
+        const threadId = threadSpan ? 
+          threadSpan.getAttribute('data-legacy-thread-id') : 
+          (row.querySelector('[data-thread-id]')?.getAttribute('data-thread-id') || 
+           `email_${index}`);
+           
+        const subject = threadSpan ? 
+          threadSpan.textContent.trim() : 
+          (row.querySelector('.y6')?.textContent.trim() || 'No subject');
 
-        // Find sender
+        // Find sender - 尝试多种选择器
         const senderElement = row.querySelector('[email]') ||
                              row.querySelector('.yW span') ||
-                             row.querySelector('.bA4 span');
+                             row.querySelector('.bA4 span') ||
+                             row.querySelector('.yX span');
         const sender = senderElement ?
-          (senderElement.getAttribute('email') || senderElement.textContent.trim()) : 'Unknown';
+          (senderElement.getAttribute('email') || 
+           senderElement.getAttribute('name') ||
+           senderElement.textContent.trim()) : 'Unknown';
 
         // Find date
         const dateElement = row.querySelector('.xW span[title]') ||
-                           row.querySelector('.xW');
+                           row.querySelector('.xW') ||
+                           row.querySelector('[title*="202"]');  // 查找包含年份的元素
         const date = dateElement ?
           (dateElement.getAttribute('title') || dateElement.textContent.trim()) : 'Unknown';
 
         // Check if unread
         const isUnread = row.classList.contains('zE') ||
-                        row.querySelector('.yW .zE') !== null;
+                        row.querySelector('.zE') !== null;
 
         emails.push({
           id: threadId,
@@ -296,15 +752,21 @@ class GmailInterface {
           sender: sender,
           date: date,
           isUnread: isUnread,
-          index: index
+          index: index,
+          view: currentView
         });
       } catch (error) {
         console.error(`Error processing email row ${index}:`, error);
       }
     });
 
-    console.log(`Extracted ${emails.length} emails`);
-    return emails;
+    console.log(`Extracted ${emails.length} emails from ${currentView} view`);
+    return {
+      emails: emails,
+      totalCount: emails.length,
+      currentView: currentView,
+      timestamp: new Date().toISOString()
+    };
   }
 
   async sendEmail(to, subject, body) {
@@ -689,68 +1151,111 @@ class GmailInterface {
 
     const limit = options.limit || 10;
 
-    // Build the full search query with options
-    let fullQuery = query;
-    
-    // Add additional filters from options
-    if (options.from) {
-      fullQuery += ` from:${options.from}`;
+    try {
+      // Build the full search query with options
+      let fullQuery = query;
+
+      // Add additional filters from options
+      if (options.from) {
+        fullQuery += ` from:${options.from}`;
+      }
+      if (options.subject) {
+        fullQuery += ` subject:${options.subject}`;
+      }
+      if (options.unread === true) {
+        fullQuery += ` is:unread`;
+      }
+      if (options.dateFrom) {
+        fullQuery += ` after:${options.dateFrom}`;
+      }
+      if (options.dateTo) {
+        fullQuery += ` before:${options.dateTo}`;
+      }
+
+      console.log('Full search query:', fullQuery);
+
+      // Find the search box
+      const searchBox = document.querySelector('input[aria-label*="Search"]') ||
+                       document.querySelector('input[name="q"]') ||
+                       document.querySelector('.gb_hf');
+
+      if (!searchBox) {
+        throw new Error('Could not find search box');
+      }
+
+      // Focus the search box first
+      searchBox.focus();
+
+      // Clear existing value
+      searchBox.value = '';
+
+      // Set new search query
+      searchBox.value = fullQuery;
+      searchBox.dispatchEvent(new Event('input', { bubbles: true }));
+
+      // Trigger search by simulating Enter key
+      const enterEvent = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        keyCode: 13,
+        which: 13,
+        bubbles: true
+      });
+      searchBox.dispatchEvent(enterEvent);
+
+      // Wait for search results to load
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // Get search results - safely handle getEmailList return format
+      const emailListResult = this.getEmailList();
+      let emails = [];
+      let errorInfo = null;
+
+      if (Array.isArray(emailListResult)) {
+        // Backward compatibility: if returned as array
+        emails = emailListResult.slice(0, limit);
+        console.log(`Got ${emails.length} emails from search (array format)`);
+      } else if (emailListResult && typeof emailListResult === 'object') {
+        // Standard format: if returned as object
+        if (emailListResult.error) {
+          console.warn('getEmailList returned error:', emailListResult.error);
+          errorInfo = emailListResult.error;
+          emails = [];
+        } else if (emailListResult.emails) {
+          emails = emailListResult.emails.slice(0, limit);
+          console.log(`Got ${emails.length} emails from search (object format)`);
+        } else {
+          console.warn('getEmailList returned object without emails array:', emailListResult);
+          emails = [];
+        }
+      } else {
+        // Unexpected format
+        console.error('getEmailList returned unexpected format:', emailListResult);
+        emails = [];
+      }
+
+      const result = {
+        query: fullQuery,
+        results: emails,
+        count: emails.length,
+        url: window.location.href
+      };
+
+      if (errorInfo) {
+        result.warning = errorInfo;
+      }
+
+      return result;
+
+    } catch (error) {
+      console.error('Error in searchEmails:', error);
+      return {
+        query: fullQuery || query,
+        results: [],
+        count: 0,
+        error: `Search failed: ${error.message}`,
+        url: window.location.href
+      };
     }
-    if (options.subject) {
-      fullQuery += ` subject:${options.subject}`;
-    }
-    if (options.unread === true) {
-      fullQuery += ` is:unread`;
-    }
-    if (options.dateFrom) {
-      fullQuery += ` after:${options.dateFrom}`;
-    }
-    if (options.dateTo) {
-      fullQuery += ` before:${options.dateTo}`;
-    }
-
-    console.log('Full search query:', fullQuery);
-
-    // Find the search box
-    const searchBox = document.querySelector('input[aria-label*="Search"]') ||
-                     document.querySelector('input[name="q"]') ||
-                     document.querySelector('.gb_hf');
-
-    if (!searchBox) {
-      throw new Error('Could not find search box');
-    }
-
-    // Focus the search box first
-    searchBox.focus();
-    
-    // Clear existing value
-    searchBox.value = '';
-    
-    // Set new search query
-    searchBox.value = fullQuery;
-    searchBox.dispatchEvent(new Event('input', { bubbles: true }));
-
-    // Trigger search by simulating Enter key
-    const enterEvent = new KeyboardEvent('keydown', { 
-      key: 'Enter', 
-      keyCode: 13,
-      which: 13,
-      bubbles: true 
-    });
-    searchBox.dispatchEvent(enterEvent);
-
-    // Wait for search results to load
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // Get search results
-    const emails = this.getEmailList().slice(0, limit);
-
-    return {
-      query: fullQuery,
-      results: emails,
-      count: emails.length,
-      url: window.location.href
-    };
   }
 
   debugPageState() {
@@ -778,11 +1283,17 @@ class GmailInterface {
         chromeRuntime: typeof chrome !== 'undefined' && !!chrome.runtime
       },
 
-      // Available email IDs
-      availableEmails: this.getEmailList().slice(0, 5).map(e => ({
-        id: e.id,
-        subject: e.subject.substring(0, 50)
-      }))
+      // Available email IDs - safely handle getEmailList return format
+      availableEmails: (() => {
+        const emailListResult = this.getEmailList();
+        const emails = Array.isArray(emailListResult) ?
+          emailListResult :
+          (emailListResult?.emails || []);
+        return emails.slice(0, 5).map(e => ({
+          id: e.id,
+          subject: e.subject ? e.subject.substring(0, 50) : 'No subject'
+        }));
+      })()
     };
 
     console.log('Debug state:', state);
@@ -1228,5 +1739,3 @@ class GmailInterface {
 
 // Start initialization
 initializeWhenReady();
-
-} // End of duplicate prevention check

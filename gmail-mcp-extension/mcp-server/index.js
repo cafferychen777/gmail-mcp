@@ -31,7 +31,12 @@ class GmailMCPServer {
           description: 'List emails in Gmail inbox',
           inputSchema: {
             type: 'object',
-            properties: {}
+            properties: {
+              accountEmail: { 
+                type: 'string', 
+                description: 'Optional: specific Gmail account to use (email address)' 
+              }
+            }
           }
         },
         {
@@ -65,7 +70,11 @@ class GmailMCPServer {
             properties: {
               to: { type: 'string', description: 'Recipient email' },
               subject: { type: 'string', description: 'Email subject' },
-              body: { type: 'string', description: 'Email body' }
+              body: { type: 'string', description: 'Email body' },
+              accountEmail: { 
+                type: 'string', 
+                description: 'Optional: specific Gmail account to use (email address)' 
+              }
             },
             required: ['to', 'subject', 'body']
           }
@@ -172,6 +181,36 @@ class GmailMCPServer {
             },
             required: ['emailId', 'attachmentId']
           }
+        },
+        {
+          name: 'list_gmail_accounts',
+          description: 'List all available Gmail accounts',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'set_active_gmail_account',
+          description: 'Set the active Gmail account for operations',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              accountEmail: { 
+                type: 'string', 
+                description: 'Email address of the account to activate' 
+              }
+            },
+            required: ['accountEmail']
+          }
+        },
+        {
+          name: 'get_active_gmail_account',
+          description: 'Get the currently active Gmail account',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
         }
       ]
     }));
@@ -189,9 +228,9 @@ class GmailMCPServer {
               const response = await fetch(`${bridgeUrl}/mcp/request`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                   action: 'getEmails',
-                  params: {} 
+                  params: { accountEmail: args.accountEmail }
                 })
               });
               
@@ -232,9 +271,12 @@ class GmailMCPServer {
               const response = await fetch(`${bridgeUrl}/mcp/request`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                   action: 'getEmailContent',
-                  params: { emailId: args.emailId }
+                  params: {
+                    emailId: args.emailId,
+                    accountEmail: args.accountEmail
+                  }
                 })
               });
               
@@ -269,11 +311,12 @@ class GmailMCPServer {
               const response = await fetch(`${bridgeUrl}/mcp/request`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                   action: 'replyEmail',
                   params: {
                     emailId: args.emailId,
-                    content: args.content
+                    content: args.content,
+                    accountEmail: args.accountEmail
                   }
                 })
               });
@@ -318,12 +361,13 @@ class GmailMCPServer {
               const response = await fetch(`${bridgeUrl}/mcp/request`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                   action: 'sendEmail',
                   params: {
                     to: args.to,
                     subject: args.subject,
-                    body: args.body
+                    body: args.body,
+                    accountEmail: args.accountEmail
                   }
                 })
               });
@@ -372,7 +416,8 @@ class GmailMCPServer {
                   action: 'searchEmails',
                   params: {
                     query: args.query,
-                    options: args.options || {}
+                    options: args.options || {},
+                    accountEmail: args.accountEmail
                   }
                 })
               });
@@ -655,6 +700,134 @@ Status: ${result.data.message}`
                   type: 'text',
                   text: `Error: ${error.message}`
                 }]
+              };
+            }
+
+          case 'list_gmail_accounts':
+            try {
+              const response = await fetch(`${bridgeUrl}/mcp/request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  action: 'getAccounts',
+                  params: {} 
+                })
+              });
+              
+              const result = await response.json();
+              
+              if (result.success && result.data) {
+                const accounts = result.data.accounts || [];
+                const activeAccount = result.data.activeAccount;
+                
+                return { 
+                  content: [{ 
+                    type: 'text', 
+                    text: `Available Gmail Accounts:
+
+${accounts.map((account, index) => 
+  `${index + 1}. ${account.email} ${account.isActive ? '(Active)' : ''}
+     Tab ID: ${account.tabId}
+     Registered: ${new Date(account.registeredAt).toLocaleString()}
+     Last Active: ${new Date(account.lastActive).toLocaleString()}`
+).join('\n\n')}
+
+${activeAccount ? `\nCurrently Active: ${activeAccount.account.email}` : '\nNo active account set'}`
+                  }] 
+                };
+              } else {
+                return { 
+                  content: [{ 
+                    type: 'text', 
+                    text: 'No Gmail accounts found. Please ensure Gmail tabs are open and the extension is connected.' 
+                  }] 
+                };
+              }
+            } catch (error) {
+              return { 
+                content: [{ 
+                  type: 'text', 
+                  text: `Error retrieving accounts: ${error.message}` 
+                }] 
+              };
+            }
+
+          case 'set_active_gmail_account':
+            try {
+              const response = await fetch(`${bridgeUrl}/mcp/request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  action: 'setActiveAccount',
+                  params: { accountEmail: args.accountEmail } 
+                })
+              });
+              
+              const result = await response.json();
+              
+              if (result.success && result.data?.success) {
+                return { 
+                  content: [{ 
+                    type: 'text', 
+                    text: `Successfully switched to account: ${args.accountEmail}` 
+                  }] 
+                };
+              } else {
+                return { 
+                  content: [{ 
+                    type: 'text', 
+                    text: `Failed to switch account: ${result.error || result.data?.error || 'Unknown error'}` 
+                  }] 
+                };
+              }
+            } catch (error) {
+              return { 
+                content: [{ 
+                  type: 'text', 
+                  text: `Error switching account: ${error.message}` 
+                }] 
+              };
+            }
+
+          case 'get_active_gmail_account':
+            try {
+              const response = await fetch(`${bridgeUrl}/mcp/request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'getActiveAccount',
+                  params: {}
+                })
+              });
+              
+              const result = await response.json();
+
+              if (result.success && result.data?.success && result.data?.activeAccount) {
+                const activeAccount = result.data.activeAccount;
+                return {
+                  content: [{
+                    type: 'text',
+                    text: `Active Gmail Account:
+Email: ${activeAccount.account.email}
+Tab ID: ${activeAccount.tabId}
+Last Active: ${new Date(activeAccount.account.lastActive).toLocaleString()}
+Total Accounts: ${result.data.totalAccounts || 'Unknown'}`
+                  }]
+                };
+              } else {
+                return {
+                  content: [{
+                    type: 'text',
+                    text: 'No active Gmail account set. Use set_active_gmail_account to activate one.'
+                  }]
+                };
+              }
+            } catch (error) {
+              return { 
+                content: [{ 
+                  type: 'text', 
+                  text: `Error retrieving active account: ${error.message}` 
+                }] 
               };
             }
 

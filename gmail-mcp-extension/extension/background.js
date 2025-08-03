@@ -6,6 +6,205 @@ let bridgeConnectionAttempts = 0;
 let bridgeLastError = null;
 let bridgeHealthy = false;
 
+// Account Manager for multi-account support
+class AccountManager {
+  constructor() {
+    this.accounts = new Map(); // tabId -> accountInfo
+    this.activeAccountTabId = null;
+    this.lastActiveTime = new Map(); // tabId -> timestamp
+  }
+
+  registerAccount(tabId, accountInfo) {
+    const account = {
+      ...accountInfo,
+      tabId,
+      registeredAt: Date.now(),
+      lastActive: Date.now(),
+      viewState: accountInfo.viewState || 'unknown',
+      lastActivity: accountInfo.lastActivity || Date.now()
+    };
+    
+    this.accounts.set(tabId, account);
+    this.lastActiveTime.set(tabId, Date.now());
+    
+    // If no active account, set as default
+    if (!this.activeAccountTabId || !this.accounts.has(this.activeAccountTabId)) {
+      this.activeAccountTabId = tabId;
+    }
+    
+    console.log(`Registered account: ${accountInfo.email} on tab ${tabId} (view: ${account.viewState})`);
+    console.log(`Total accounts: ${this.accounts.size}`);
+    
+    return { success: true, isActive: this.activeAccountTabId === tabId };
+  }
+
+  getAccountList() {
+    return Array.from(this.accounts.values()).map(account => ({
+      ...account,
+      isActive: account.tabId === this.activeAccountTabId
+    }));
+  }
+
+  getAccountByEmail(email, preferredView = 'inbox') {
+    const matchingAccounts = [];
+    
+    // 收集所有匹配的账号
+    for (const [tabId, account] of this.accounts) {
+      if (account.email === email) {
+        matchingAccounts.push({ tabId, account });
+      }
+    }
+    
+    if (matchingAccounts.length === 0) return null;
+    if (matchingAccounts.length === 1) return matchingAccounts[0];
+    
+    // 多个匹配时，智能选择最佳的
+    // 优先级：1. 在目标视图的 2. 最近活动的 3. 第一个
+    
+    // 查找在目标视图的账号
+    const inPreferredView = matchingAccounts.find(
+      ({ account }) => account.viewState === preferredView
+    );
+    if (inPreferredView) return inPreferredView;
+    
+    // 查找在收件箱的账号（如果不是已经在找收件箱）
+    if (preferredView !== 'inbox') {
+      const inInbox = matchingAccounts.find(
+        ({ account }) => account.viewState === 'inbox'
+      );
+      if (inInbox) return inInbox;
+    }
+    
+    // 按最后活动时间排序，返回最近的
+    matchingAccounts.sort((a, b) => 
+      (b.account.lastActivity || 0) - (a.account.lastActivity || 0)
+    );
+    
+    return matchingAccounts[0];
+  }
+  
+  // 新增：获取特定邮箱的所有标签页
+  getAllTabsForEmail(email) {
+    const tabs = [];
+    for (const [tabId, account] of this.accounts) {
+      if (account.email === email) {
+        tabs.push({ tabId, account });
+      }
+    }
+    return tabs;
+  }
+
+  getAccountByTabId(tabId) {
+    return this.accounts.get(tabId);
+  }
+
+  setActiveAccount(tabId) {
+    if (this.accounts.has(tabId)) {
+      this.activeAccountTabId = tabId;
+      this.lastActiveTime.set(tabId, Date.now());
+      console.log(`Set active account to tab ${tabId}:`, this.accounts.get(tabId).email);
+      return true;
+    }
+    return false;
+  }
+
+  getActiveAccount() {
+    if (this.activeAccountTabId && this.accounts.has(this.activeAccountTabId)) {
+      return {
+        tabId: this.activeAccountTabId,
+        account: this.accounts.get(this.activeAccountTabId)
+      };
+    }
+    return null;
+  }
+
+  removeAccount(tabId) {
+    const account = this.accounts.get(tabId);
+    if (account) {
+      console.log(`Removing account: ${account.email} from tab ${tabId}`);
+    }
+    
+    this.accounts.delete(tabId);
+    this.lastActiveTime.delete(tabId);
+    
+    // If removed account was active, select another
+    if (this.activeAccountTabId === tabId) {
+      const remaining = Array.from(this.accounts.keys());
+      if (remaining.length > 0) {
+        // Select most recently active account
+        const mostRecent = remaining.reduce((a, b) => 
+          (this.lastActiveTime.get(a) || 0) > (this.lastActiveTime.get(b) || 0) ? a : b
+        );
+        this.activeAccountTabId = mostRecent;
+        console.log(`Switched active account to tab ${mostRecent}`);
+      } else {
+        this.activeAccountTabId = null;
+        console.log('No accounts remaining');
+      }
+    }
+  }
+
+  updateLastActive(tabId) {
+    if (this.accounts.has(tabId)) {
+      this.lastActiveTime.set(tabId, Date.now());
+      const account = this.accounts.get(tabId);
+      if (account) {
+        account.lastActive = Date.now();
+      }
+    }
+  }
+  
+  // 新增：更新账号状态（视图、活动时间等）
+  updateAccountState(tabId, accountInfo) {
+    if (this.accounts.has(tabId)) {
+      const account = this.accounts.get(tabId);
+      account.viewState = accountInfo.viewState || account.viewState;
+      account.lastActivity = accountInfo.lastActivity || Date.now();
+      account.lastActive = Date.now();
+      account.url = accountInfo.url || account.url;
+      this.lastActiveTime.set(tabId, Date.now());
+      
+      console.log(`Updated account state for tab ${tabId}: view=${account.viewState}`);
+      return true;
+    }
+    return false;
+  }
+
+  // Intelligently select target tab
+  selectTargetTab(accountEmail = null, preferredView = 'inbox') {
+    if (accountEmail) {
+      // Specific account requested, find best matching tab
+      const result = this.getAccountByEmail(accountEmail, preferredView);
+      if (result) {
+        console.log(`Selected tab ${result.tabId} for ${accountEmail} (view: ${result.account.viewState})`);
+        return result.tabId;
+      }
+      return null;
+    } else {
+      // Use active account, but verify it's still valid
+      const active = this.getActiveAccount();
+      if (active) {
+        // Check if active account is in a good state for the operation
+        if (preferredView && active.account.viewState !== preferredView) {
+          console.log(`Active account not in ${preferredView} view, searching for better option`);
+          // Try to find any account in the preferred view
+          for (const [tabId, account] of this.accounts) {
+            if (account.viewState === preferredView) {
+              console.log(`Found tab ${tabId} in ${preferredView} view`);
+              return tabId;
+            }
+          }
+        }
+        return active.tabId;
+      }
+      return null;
+    }
+  }
+}
+
+// Create global account manager instance
+const accountManager = new AccountManager();
+
 // Keep service worker alive
 let keepAliveInterval;
 
@@ -40,8 +239,26 @@ function checkContentScriptHealth() {
               console.error(`Re-injection failed for tab ${tab.id}:`, chrome.runtime.lastError.message);
             } else {
               console.log(`Content script re-injected into tab ${tab.id}`);
+              // 触发账号重新注册
+              setTimeout(() => {
+                chrome.tabs.sendMessage(tab.id, { action: 'refreshAccount' }, (response) => {
+                  if (!chrome.runtime.lastError) {
+                    console.log(`Account refreshed for tab ${tab.id}`);
+                  }
+                });
+              }, 2000);
             }
           });
+        } else {
+          // Content script 响应了，检查是否有账号注册
+          if (!accountManager.getAccountByTabId(tab.id)) {
+            console.log(`Tab ${tab.id} has no registered account, requesting registration...`);
+            chrome.tabs.sendMessage(tab.id, { action: 'refreshAccount' }, (response) => {
+              if (!chrome.runtime.lastError) {
+                console.log(`Account registration requested for tab ${tab.id}`);
+              }
+            });
+          }
         }
       });
     });
@@ -105,22 +322,150 @@ async function pollBridgeServer() {
       if (data.id && data.action) {
         console.log('Received request from bridge:', data);
 
-        // Forward to Gmail tab with enhanced error handling
+        // Handle account management actions directly in background script
+        if (data.action === 'getAccounts') {
+          const accountsData = {
+            accounts: accountManager.getAccountList(),
+            activeAccount: accountManager.getActiveAccount()
+          };
+          console.log('Handling getAccounts directly:', accountsData);
+          
+          // 确保即使没有账号也返回响应
+          try {
+            await sendResponseToBridge(data.id, accountsData);
+            console.log('Response sent successfully for getAccounts');
+          } catch (error) {
+            console.error('Failed to send getAccounts response:', error);
+            // 尝试发送错误响应
+            await sendResponseToBridge(data.id, { 
+              error: 'Failed to get accounts: ' + error.message 
+            });
+          }
+          continue; // Continue polling loop instead of returning
+        }
+
+        if (data.action === 'setActiveAccount') {
+          const { accountEmail, tabId } = data.params || {};
+          let success = false;
+          let errorMessage = '';
+
+          if (tabId) {
+            success = accountManager.setActiveAccount(tabId);
+            if (!success) {
+              errorMessage = `Tab ID ${tabId} not found`;
+            }
+          } else if (accountEmail) {
+            // 清理邮箱地址格式（处理可能的格式问题）
+            const cleanEmail = accountEmail.includes('@') ?
+              (accountEmail.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/) || [null, accountEmail])[1] :
+              accountEmail;
+
+            const result = accountManager.getAccountByEmail(cleanEmail);
+            if (result) {
+              success = accountManager.setActiveAccount(result.tabId);
+            } else {
+              // 尝试模糊匹配（处理格式差异）
+              const accounts = accountManager.getAccountList();
+              const fuzzyMatch = accounts.find(acc =>
+                acc.email.includes(cleanEmail) || cleanEmail.includes(acc.email.split('@')[0])
+              );
+              if (fuzzyMatch) {
+                success = accountManager.setActiveAccount(fuzzyMatch.tabId);
+              } else {
+                errorMessage = `Account ${cleanEmail} not found. Available accounts: ${accounts.map(a => a.email).join(', ')}`;
+              }
+            }
+          } else {
+            errorMessage = 'No accountEmail or tabId provided';
+          }
+
+          const responseData = {
+            success,
+            error: errorMessage || undefined,
+            activeAccount: success ? accountManager.getActiveAccount() : null,
+            availableAccounts: accountManager.getAccountList().map(a => a.email)
+          };
+          console.log('Handling setActiveAccount directly:', responseData);
+          await sendResponseToBridge(data.id, responseData);
+          continue; // Continue polling loop instead of returning
+        }
+
+        if (data.action === 'getActiveAccount') {
+          const activeAccount = accountManager.getActiveAccount();
+          const responseData = {
+            success: !!activeAccount,
+            activeAccount: activeAccount,
+            totalAccounts: accountManager.getAccountList().length
+          };
+          console.log('Handling getActiveAccount directly:', responseData);
+          await sendResponseToBridge(data.id, responseData);
+          continue; // Continue polling loop instead of returning
+        }
+
+        // Forward other actions to Gmail tab with enhanced error handling
         chrome.tabs.query({ url: 'https://mail.google.com/*' }, async (tabs) => {
           if (tabs.length > 0) {
+            // 根据操作类型确定需要的视图
+            let preferredView = 'inbox'; // 默认视图
+            if (data.action === 'getEmails' || data.action === 'searchEmails') {
+              preferredView = 'inbox'; // 邮件列表操作需要收件箱视图
+            } else if (data.action === 'sendEmail' || data.action === 'composeReply') {
+              preferredView = null; // 撰写操作在任何视图都可以
+            }
+            
+            // Intelligently select target tab with view preference
+            let targetTabId = accountManager.selectTargetTab(data.params?.accountEmail, preferredView);
+            
+            if (!targetTabId && tabs.length > 0) {
+              // If no specific account found, use first available
+              targetTabId = tabs[0].id;
+              console.warn('No specific account found, using first available tab');
+            }
+            
+            // 验证标签页是否仍然存在并且是Gmail页面
+            const targetTab = tabs.find(tab => tab.id === targetTabId);
+            if (!targetTab) {
+              console.warn(`Tab ${targetTabId} no longer exists, selecting new tab`);
+              // 选择第一个可用的Gmail标签页
+              targetTabId = tabs[0].id;
+              // 更新账号管理器中的活动账号
+              accountManager.setActiveAccount(targetTabId);
+            }
+            
+            console.log(`Forwarding ${data.action} to tab ${targetTabId}`);
+            
+            if (!targetTabId) {
+              await sendResponseToBridge(data.id, { error: 'No suitable Gmail tab found' });
+              return;
+            }
+
             try {
+              // Update last active time
+              accountManager.updateLastActive(targetTabId);
+              
               // Create a promise to wait for response
               const responsePromise = new Promise((resolve, reject) => {
                 const requestId = data.id;
+                let responseReceived = false;
 
                 // Store callback for bridge response
                 if (!globalThis.bridgeRequests) {
                   globalThis.bridgeRequests = new Map();
                 }
-                globalThis.bridgeRequests.set(requestId, resolve);
+                
+                // Setup response handler with timeout
+                const responseHandler = (response) => {
+                  if (!responseReceived) {
+                    responseReceived = true;
+                    globalThis.bridgeRequests.delete(requestId);
+                    resolve(response);
+                  }
+                };
+                
+                globalThis.bridgeRequests.set(requestId, responseHandler);
 
-                // Send to content script with error handling
-                chrome.tabs.sendMessage(tabs[0].id, {
+                // Send to specific tab - don't use callback in sendMessage for async
+                chrome.tabs.sendMessage(targetTabId, {
                   action: data.action,
                   params: data.params,
                   id: requestId
@@ -128,20 +473,71 @@ async function pollBridgeServer() {
                   if (chrome.runtime.lastError) {
                     const errorMessage = chrome.runtime.lastError.message || 'Unknown content script error';
                     console.error('Error sending to content script:', errorMessage);
-                    globalThis.bridgeRequests.delete(requestId);
-                    resolve({ error: `Content script error: ${errorMessage}` });
-                  } else {
-                    // Handle response directly
-                    console.log('Received response from content script for bridge:', response);
-                    globalThis.bridgeRequests.delete(requestId);
-                    resolve(response);
+
+                    // Auto-retry with content script re-injection
+                    if (errorMessage.includes('Could not establish connection') ||
+                        errorMessage.includes('Receiving end does not exist')) {
+                      console.log(`Auto-retrying with content script re-injection for tab ${targetTabId}`);
+
+                      // Re-inject content script
+                      chrome.scripting.executeScript({
+                        target: { tabId: targetTabId },
+                        files: ['content.js']
+                      }, () => {
+                        if (chrome.runtime.lastError) {
+                          console.error(`Re-injection failed for tab ${targetTabId}:`, chrome.runtime.lastError.message);
+                          if (!responseReceived) {
+                            responseReceived = true;
+                            globalThis.bridgeRequests.delete(requestId);
+                            resolve({ error: `Content script error: ${errorMessage}` });
+                          }
+                        } else {
+                          console.log(`Content script re-injected, retrying message to tab ${targetTabId}`);
+
+                          // Retry the message after a short delay
+                          setTimeout(() => {
+                            chrome.tabs.sendMessage(targetTabId, {
+                              action: data.action,
+                              params: data.params,
+                              id: requestId
+                            }, (retryResponse) => {
+                              if (!responseReceived) {
+                                responseReceived = true;
+                                globalThis.bridgeRequests.delete(requestId);
+                                if (chrome.runtime.lastError) {
+                                  resolve({ error: `Retry failed: ${chrome.runtime.lastError.message}` });
+                                } else {
+                                  console.log('Retry successful:', retryResponse);
+                                  resolve(retryResponse);
+                                }
+                              }
+                            });
+                          }, 1000);
+                        }
+                      });
+                    } else {
+                      if (!responseReceived) {
+                        responseReceived = true;
+                        globalThis.bridgeRequests.delete(requestId);
+                        resolve({ error: `Content script error: ${errorMessage}` });
+                      }
+                    }
+                  } else if (response !== undefined) {
+                    // Handle response directly if provided synchronously
+                    console.log('Received immediate response from content script for bridge:', response);
+                    if (!responseReceived) {
+                      responseReceived = true;
+                      globalThis.bridgeRequests.delete(requestId);
+                      resolve(response);
+                    }
                   }
                 });
 
                 // Timeout after 30 seconds for search operations (they take longer)
                 const timeoutDuration = data.action === 'searchEmails' ? 30000 : 15000;
                 setTimeout(() => {
-                  if (globalThis.bridgeRequests.has(requestId)) {
+                  if (!responseReceived && globalThis.bridgeRequests.has(requestId)) {
+                    responseReceived = true;
                     globalThis.bridgeRequests.delete(requestId);
                     resolve({ error: `Request timeout after ${timeoutDuration/1000} seconds` });
                   }
@@ -198,6 +594,9 @@ async function pollBridgeServer() {
 async function sendResponseToBridge(requestId, result, retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
+      const responseController = new AbortController();
+      const responseTimeout = setTimeout(() => responseController.abort(), 5000);
+      
       const response = await fetch(`${BRIDGE_URL}/chrome/response`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -206,8 +605,10 @@ async function sendResponseToBridge(requestId, result, retries = 3) {
           response: result.error ? null : result,
           error: result.error
         }),
-        timeout: 5000
+        signal: responseController.signal
       });
+      
+      clearTimeout(responseTimeout);
 
       if (response.ok) {
         return; // Success
@@ -231,6 +632,8 @@ async function sendResponseToBridge(requestId, result, retries = 3) {
 setTimeout(() => {
   console.log('Initializing bridge server connection...');
   pollBridgeServer();
+  // 初始健康检查
+  checkContentScriptHealth();
 }, 1000);
 
 // Also restart polling when extension wakes up
@@ -257,7 +660,52 @@ chrome.runtime.onSuspendCanceled.addListener(() => {
 });
 
 // Handle messages from content script and popup
+// IMPORTANT: For Manifest V3, this must be synchronous at top level
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Handle account registration from content script
+  if (request.action === 'registerAccount') {
+    const result = accountManager.registerAccount(sender.tab.id, request.accountInfo);
+    sendResponse(result);
+    return false; // Synchronous response
+  }
+  
+  // Handle account state update from content script
+  if (request.action === 'updateAccountState') {
+    const result = accountManager.updateAccountState(sender.tab.id, request.accountInfo);
+    sendResponse({ success: result });
+    return false; // Synchronous response
+  }
+
+  // Handle get accounts request
+  if (request.action === 'getAccounts') {
+    sendResponse({
+      accounts: accountManager.getAccountList(),
+      activeAccount: accountManager.getActiveAccount()
+    });
+    return false; // Synchronous response
+  }
+
+  // Handle set active account request
+  if (request.action === 'setActiveAccount') {
+    const { accountEmail, tabId } = request;
+    let success = false;
+    
+    if (tabId) {
+      success = accountManager.setActiveAccount(tabId);
+    } else if (accountEmail) {
+      const result = accountManager.getAccountByEmail(accountEmail);
+      if (result) {
+        success = accountManager.setActiveAccount(result.tabId);
+      }
+    }
+    
+    sendResponse({ 
+      success, 
+      activeAccount: accountManager.getActiveAccount() 
+    });
+    return false; // Synchronous response
+  }
+
   // Handle popup requests
   if (request.action === 'checkConnection') {
     // Enhanced connection status check
@@ -269,14 +717,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       lastError: bridgeLastError,
       bridgeUrl: BRIDGE_URL
     });
-    return true;
+    return false; // Synchronous response
   }
   
   // Handle content script ready signal
   if (request.action === 'contentScriptReady') {
     console.log('Content script ready on tab:', sender.tab.id);
     sendResponse({ status: 'acknowledged' });
-    return true;
+    return false; // Synchronous response
   }
 
   // Handle manual content script injection request
@@ -322,8 +770,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       // Forward to Gmail content script
       chrome.tabs.query({ url: 'https://mail.google.com/*' }, (tabs) => {
         if (tabs.length > 0) {
-          console.log(`Forwarding ${request.action} request to content script, id: ${requestId}`);
-          chrome.tabs.sendMessage(tabs[0].id, {
+          // Use account manager to select target tab
+          let targetTabId = accountManager.selectTargetTab(request.params?.accountEmail);
+          
+          if (!targetTabId && tabs.length > 0) {
+            targetTabId = tabs[0].id;
+            console.warn('No specific account found for popup request, using first available tab');
+          }
+          
+          if (!targetTabId) {
+            sendResponse({ error: 'No suitable Gmail tab found' });
+            globalThis.pendingRequests.delete(requestId);
+            return;
+          }
+          
+          console.log(`Forwarding ${request.action} request to content script on tab ${targetTabId}, id: ${requestId}`);
+          chrome.tabs.sendMessage(targetTabId, {
             ...request,
             id: requestId
           }, (response) => {
@@ -347,19 +809,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
   }
   
-  // Handle responses from content script for bridge requests only
-  if (sender.tab && sender.tab.url.includes('mail.google.com')) {
+  // Handle responses from content script for bridge requests
+  if (sender.tab && sender.tab.url && sender.tab.url.includes('mail.google.com')) {
     // Check if this is a response to a bridge request
-    if (request.response && request.id) {
-      const bridgeRequest = globalThis.bridgeRequests?.get(request.id);
-      if (bridgeRequest) {
-        globalThis.bridgeRequests.delete(request.id);
-        bridgeRequest(request.response);
-        return;
+    if (request.response !== undefined && request.id) {
+      console.log(`Received async response from content script for request ${request.id}`);
+      const bridgeRequestHandler = globalThis.bridgeRequests?.get(request.id);
+      if (bridgeRequestHandler) {
+        console.log('Found matching bridge request, sending response');
+        bridgeRequestHandler(request.response);
+        sendResponse({ acknowledged: true });
+        return false;
+      } else {
+        console.log('No matching bridge request found for ID:', request.id);
       }
     }
   }
   
+  // Default: keep channel open for async response from content script
   return true;
 });
 
@@ -397,6 +864,19 @@ chrome.runtime.onInstalled.addListener((details) => {
       injectWithRetry();
     });
   });
+});
+
+// Tab lifecycle management
+chrome.tabs.onRemoved.addListener((tabId) => {
+  accountManager.removeAccount(tabId);
+});
+
+// Tab update monitoring
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (tab.url && tab.url.includes('mail.google.com') && changeInfo.status === 'complete') {
+    // Tab loaded, may need to re-detect account
+    accountManager.updateLastActive(tabId);
+  }
 });
 
 // Debug helpers

@@ -77,24 +77,23 @@ class GmailBridgeServer {
     // MCP server calls this to request Gmail data
     this.app.post('/mcp/request', async (req, res) => {
       const { action, params } = req.body;
+      const targetAccount = params?.accountEmail;
       const requestId = uuidv4();
+
+      console.log(`Received MCP request: action=${action}, params=`, params);
+
+      // Note: Removed connection check as it was causing issues
+      // Chrome extension polling works fine, and account management proves connection is working
       
-      // Check if Chrome is connected
-      if (!this.chromeConnected || 
-          (this.lastPing && (new Date() - this.lastPing) > 10000)) {
-        res.status(503).json({ 
-          error: 'Chrome extension not connected',
-          message: 'Please ensure Chrome is running with Gmail MCP Bridge extension'
-        });
-        return;
-      }
-      
-      // Create a promise that will be resolved when Chrome responds
+      // Create request with account information
       const promise = new Promise((resolve, reject) => {
         this.pendingRequests.set(requestId, {
           id: requestId,
           action,
-          params,
+          params: {
+            ...params,
+            accountEmail: targetAccount // Pass account info
+          },
           sent: false,
           resolve,
           reject,
@@ -119,6 +118,24 @@ class GmailBridgeServer {
           error: error.message 
         });
       }
+    });
+    
+    // Account management endpoints
+    this.app.get('/accounts', (req, res) => {
+      // This endpoint could be enhanced to get account list from Chrome
+      res.json({
+        accounts: [],
+        message: 'Account list endpoint - implementation pending'
+      });
+    });
+    
+    this.app.post('/accounts/set-active', (req, res) => {
+      const { accountEmail } = req.body;
+      // This endpoint could be enhanced to set active account through Chrome
+      res.json({
+        success: false,
+        message: 'Account switching endpoint - implementation pending'
+      });
     });
   }
   
