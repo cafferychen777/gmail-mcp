@@ -102,3 +102,19 @@ build/
 tmp/
 temp/
 .tmp/
+
+# Debug and diagnostic files
+gmail-mcp-extension/check-gmail-page.js
+gmail-mcp-extension/debug-browser-console.js
+gmail-mcp-extension/fix-account-registration.js
+gmail-mcp-extension/mcp-server/debug-*.js
+gmail-mcp-extension/mcp-server/diagnose*.js
+gmail-mcp-extension/mcp-server/verify-connection.js
+
+# Documentation drafts (keep only essential docs)
+gmail-mcp-extension/PROBLEM_ANALYSIS_AND_SOLUTIONS.md
+gmail-mcp-extension/FINAL_FIX.md
+gmail-mcp-extension/TEST_CHECKLIST.md
+gmail-mcp-extension/CONNECTION_VERIFICATION.md
+gmail-mcp-extension/CLAUDE_DESKTOP_QUICK_TEST.md
+gmail-mcp-extension/MULTI_ACCOUNT_FIX_SUMMARY.md
