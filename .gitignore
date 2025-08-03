@@ -118,3 +118,10 @@ gmail-mcp-extension/TEST_CHECKLIST.md
 gmail-mcp-extension/CONNECTION_VERIFICATION.md
 gmail-mcp-extension/CLAUDE_DESKTOP_QUICK_TEST.md
 gmail-mcp-extension/MULTI_ACCOUNT_FIX_SUMMARY.md
+
+# IMPORTANT: DO NOT IGNORE THESE CRITICAL FILES
+# The following files should NEVER be deleted or ignored:
+# - llms-full.txt (LLM model configurations)
+# - *.json configuration files
+# - README.md, SETUP.md, LICENSE files
+# - Core implementation files (*.js, *.py in main directories)
