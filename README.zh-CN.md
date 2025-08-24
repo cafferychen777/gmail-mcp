@@ -1,13 +1,27 @@
 # Gmail MCP Bridge
 
-> **🚀 让Claude Desktop直接操作你的Gmail - 无需API密钥，完全免费！**
+> **🚀 让 Claude 直接操作 Gmail。无需 Google Cloud、无需 OAuth、无需 API Keys。**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-blue.svg)](https://developer.chrome.com/docs/extensions/)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io/)
 [![Status: Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)](https://github.com/cafferychen777/gmail-mcp)
+![GitHub Repo stars](https://img.shields.io/github/stars/cafferychen777/gmail-mcp?style=social)
+[![Website](https://img.shields.io/website?url=https%3A%2F%2Fcafferychen777.github.io%2Fgmail-mcp%2F)](https://cafferychen777.github.io/gmail-mcp/)
+[![No Google Cloud / OAuth](https://img.shields.io/badge/%E6%97%A0%20Google%20Cloud%20%E3%80%81OAuth%E3%80%81API%20Keys-Yes-ff69b4)](#为什么不需要-google-cloud)
 
-**通过Chrome扩展和MCP协议，让Claude Desktop获得完整的Gmail操作能力**
+## 为什么不需要 Google Cloud
+
+本项目基于你本地的 Chrome 登录会话执行 Gmail 操作。扩展与 MCP 服务以“浏览器里人工操作”的方式工作，因此无需 Google Cloud 项目、OAuth 同意屏幕或 API Key。
+
+优势：
+- 上手简单：无云端控制台、无 OAuth 审核。
+- 隐私友好：一切动作都在你的本地浏览器会话内进行。
+- 可移植性：只要能运行 Chrome 即可使用。
+
+需要注意：
+- 需要在 Chrome 中登录目标 Gmail 账号。
+- 所有操作权限与当前 Gmail 会话一致。
 
 ## ⚡ 一键安装
 
