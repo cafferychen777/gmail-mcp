@@ -2,7 +2,7 @@
 
 English | [中文文档 README.zh-CN.md](./README.zh-CN.md)
 
-> Control Gmail from Claude Desktop via a Chrome Extension + Model Context Protocol (MCP). No API keys. Free.
+> Control Gmail from Claude. No Google Cloud. No OAuth. No API keys.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-blue.svg)](https://developer.chrome.com/docs/extensions/)
