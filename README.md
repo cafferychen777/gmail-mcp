@@ -118,7 +118,7 @@ If you'd like to help, check the good first issues.
 
 Improve link previews when sharing the repo by uploading a social image:
 
-1. Create an image at `docs/assets/images/og-preview.png` (1200×630 recommended)
+1. Use the placeholder at `docs/assets/images/og-preview.svg` (export to 1200×630 PNG if needed)
 2. Go to GitHub → Repository Settings → General → Social preview → Upload the image
 
 ## 🤝 Contributing
