@@ -12,6 +12,8 @@ English | [中文文档 README.zh-CN.md](./README.zh-CN.md)
 [![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/cafferychen777/gmail-mcp?sort=semver)](https://github.com/cafferychen777/gmail-mcp/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Discussions](https://img.shields.io/github/discussions/cafferychen777/gmail-mcp)](https://github.com/cafferychen777/gmail-mcp/discussions)
+[![Contributors](https://img.shields.io/github/contributors/cafferychen777/gmail-mcp)](https://github.com/cafferychen777/gmail-mcp/graphs/contributors)
+[![Good first issues](https://img.shields.io/github/issues-search?query=repo%3Acafferychen777%2Fgmail-mcp%20label%3A%22good-first-issue%22%20state%3Aopen&label=good%20first%20issues)](https://github.com/cafferychen777/gmail-mcp/labels/good-first-issue)
 
 Enable Gmail automation for AI assistants through a Chrome extension and the Model Context Protocol. Works locally, respects your browser session, and requires no Google API keys.
 
