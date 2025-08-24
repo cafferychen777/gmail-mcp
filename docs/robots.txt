@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://cafferychen777.github.io/gmail-mcp/sitemap.xml

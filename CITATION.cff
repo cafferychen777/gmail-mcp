@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+title: "gmail-mcp: Gmail MCP Bridge"
+message: "If you use this software, please cite it using the metadata below."
+authors:
+  - family-names: Chen
+    given-names: Caffery
+repository-code: "https://github.com/cafferychen777/gmail-mcp"
+url: "https://cafferychen777.github.io/gmail-mcp/"
+license: MIT
+year: 2025
+version: 0.1.1
+doi: ""
+abstract: "Control Gmail from Claude Desktop via a Chrome Extension + Model Context Protocol (MCP). No API keys. Free."
+keywords:
+  - Gmail automation
+  - Model Context Protocol
+  - MCP
+  - Claude Desktop
+  - Chrome extension
