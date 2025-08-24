@@ -11,10 +11,18 @@ English | [中文文档 README.zh-CN.md](./README.zh-CN.md)
 ![GitHub Repo stars](https://img.shields.io/github/stars/cafferychen777/gmail-mcp?style=social)
 [![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/cafferychen777/gmail-mcp?sort=semver)](https://github.com/cafferychen777/gmail-mcp/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Discussions](https://img.shields.io/github/discussions/cafferychen777/gmail-mcp)](https://github.com/cafferychen777/gmail-mcp/discussions)
 
 Enable Gmail automation for AI assistants through a Chrome extension and the Model Context Protocol. Works locally, respects your browser session, and requires no Google API keys.
 
+If this project helps you, please ⭐ star the repo and join the [Discussions](https://github.com/cafferychen777/gmail-mcp/discussions).
+
 ## ⚡ Installation
+
+Prerequisites:
+- Node.js 18+
+- Google Chrome (latest)
+- Claude Desktop (with MCP enabled)
 
 ```bash
 # One-command install (recommended)
@@ -122,3 +130,12 @@ MIT License — see [LICENSE](LICENSE)
 ---
 
 Gmail MCP Bridge — Control Gmail from Claude Desktop via MCP 🚀
+
+## 🧭 Community & Support
+
+- Code of Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- Security policy: [SECURITY.md](SECURITY.md)
+- Support: [SUPPORT.md](SUPPORT.md)
+- Discussions: https://github.com/cafferychen777/gmail-mcp/discussions
+- Good first issues: https://github.com/cafferychen777/gmail-mcp/labels/good-first-issue
+- Help wanted: https://github.com/cafferychen777/gmail-mcp/labels/help-wanted
