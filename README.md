@@ -18,10 +18,26 @@ English | [中文文档 README.zh-CN.md](./README.zh-CN.md)
 [![Good first issues](https://img.shields.io/github/issues-search?query=repo%3Acafferychen777%2Fgmail-mcp%20label%3A%22good-first-issue%22%20state%3Aopen&label=good%20first%20issues)](https://github.com/cafferychen777/gmail-mcp/labels/good-first-issue)
 [![Open issues](https://img.shields.io/github/issues/cafferychen777/gmail-mcp)](https://github.com/cafferychen777/gmail-mcp/issues)
 [![Open PRs](https://img.shields.io/github/issues-pr/cafferychen777/gmail-mcp)](https://github.com/cafferychen777/gmail-mcp/pulls)
+[![No Google Cloud / OAuth](https://img.shields.io/badge/No%20Google%20Cloud%20%2F%20OAuth-Yes-ff69b4)](#why-no-google-cloud)
 
 Enable Gmail automation for AI assistants through a Chrome extension and the Model Context Protocol. Works locally, respects your browser session, and requires no Google API keys.
 
 If this project helps you, please ⭐ star the repo and join the [Discussions](https://github.com/cafferychen777/gmail-mcp/discussions).
+
+> ⚡️ Bold advantage: No Google Cloud project. No OAuth consent screen. No API keys. It uses your existing Chrome session to act in Gmail.
+
+## Why no Google Cloud
+
+This project works locally by leveraging your existing Chrome browser session. The extension and MCP server act on Gmail the same way you do in the browser, so you do not need to set up a Google Cloud project, OAuth consent screen, or any API keys.
+
+Benefits:
+- Simpler onboarding: no cloud console, no OAuth app review.
+- Privacy: actions stay within your local browser session.
+- Portability: works anywhere Chrome runs.
+
+Limitations to note:
+- Requires Chrome to be installed and signed in to the target Gmail account.
+- Actions follow the permissions of your current Gmail session.
 
 ## ⚡ Installation
 
