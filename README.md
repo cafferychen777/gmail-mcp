@@ -8,6 +8,9 @@ English | [中文文档 README.zh-CN.md](./README.zh-CN.md)
 [![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-blue.svg)](https://developer.chrome.com/docs/extensions/)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io/)
 [![Status: Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)](https://github.com/cafferychen777/gmail-mcp)
+![GitHub Repo stars](https://img.shields.io/github/stars/cafferychen777/gmail-mcp?style=social)
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/cafferychen777/gmail-mcp?sort=semver)](https://github.com/cafferychen777/gmail-mcp/releases)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 Enable Gmail automation for AI assistants through a Chrome extension and the Model Context Protocol. Works locally, respects your browser session, and requires no Google API keys.
 
@@ -84,11 +87,29 @@ After installation, just ask Claude:
 - Roadmap: [docs/planning/COMPREHENSIVE_IMPROVEMENT_ROADMAP.md](docs/planning/COMPREHENSIVE_IMPROVEMENT_ROADMAP.md)
 - Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 
+## 🎬 Demo / Screenshots
+
+Screenshots and a short demo GIF will be added soon to improve onboarding and SEO. Planned assets:
+
+- docs/assets/screenshots/install.png
+- docs/assets/screenshots/claude-command.png
+- docs/assets/screenshots/gmail-action.png
+- docs/assets/screenshots/demo.gif
+
+If you'd like to help, check the good first issues.
+
 ## 🏆 Why this project
 
 - No API keys, works directly with your browser session
 - Fast local bridge with MCP for AI assistants
 - Production-ready structure with installer and diagnostics
+
+## 🔗 Social preview (Open Graph)
+
+Improve link previews when sharing the repo by uploading a social image:
+
+1. Create an image at `docs/assets/images/og-preview.png` (1200×630 recommended)
+2. Go to GitHub → Repository Settings → General → Social preview → Upload the image
 
 ## 🤝 Contributing
 
