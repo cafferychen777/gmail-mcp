@@ -25,6 +25,10 @@ If this project helps you, please ⭐ star the repo and join the [Discussions](h
 
 ## ⚡ Installation
 
+For a guided setup, see the Quick Start and Website:
+- Quick Start: [docs/quick-start/installation.md](./docs/quick-start/installation.md)
+- Website: https://cafferychen777.github.io/gmail-mcp/
+
 Prerequisites:
 - Node.js 18+
 - Google Chrome (latest)
