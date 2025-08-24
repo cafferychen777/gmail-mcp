@@ -1,0 +1,4 @@
+Contact: https://github.com/cafferychen777/gmail-mcp/security
+Policy: https://github.com/cafferychen777/gmail-mcp/blob/main/SECURITY.md
+Preferred-Languages: en, zh-CN
+Canonical: https://cafferychen777.github.io/gmail-mcp/.well-known/security.txt
