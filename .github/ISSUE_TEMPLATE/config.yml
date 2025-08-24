@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question (GitHub Discussions)
+    url: https://github.com/cafferychen777/gmail-mcp/discussions
+    about: Get help, share ideas, and discuss use-cases.
+  - name: Read Troubleshooting Guide
+    url: https://github.com/cafferychen777/gmail-mcp/blob/main/docs/user-guide/troubleshooting.md
+    about: Common issues and fixes.
+  - name: Read FAQ
+    url: https://github.com/cafferychen777/gmail-mcp/blob/main/docs/user-guide/faq.md
+    about: Frequently asked questions.
