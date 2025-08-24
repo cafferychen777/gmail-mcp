@@ -99,12 +99,15 @@ After installation, just ask Claude:
 
 ## 🎬 Demo / Screenshots
 
-Screenshots and a short demo GIF will be added soon to improve onboarding and SEO. Planned assets:
+Below are placeholder screenshots; a short demo GIF will be added soon.
 
-- docs/assets/screenshots/install.png
-- docs/assets/screenshots/claude-command.png
-- docs/assets/screenshots/gmail-action.png
-- docs/assets/screenshots/demo.gif
+![Install](docs/assets/screenshots/install.svg)
+
+![Claude command triggering Gmail tools](docs/assets/screenshots/claude-command.svg)
+
+![Gmail action executed](docs/assets/screenshots/gmail-action.svg)
+
+Planned: `docs/assets/screenshots/demo.gif` (≤10s).
 
 If you'd like to help, check the good first issues.
 
