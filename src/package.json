@@ -1,0 +1,93 @@
+{
+  "name": "gmail-mcp-bridge-v2",
+  "version": "2.0.0",
+  "description": "Gmail MCP Bridge with enhanced robustness and plugin architecture",
+  "type": "module",
+  "main": "integration-example.js",
+  "keywords": [
+    "gmail",
+    "mcp",
+    "model-context-protocol",
+    "email",
+    "plugin-system",
+    "ai",
+    "automation"
+  ],
+  "author": "Gmail MCP Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node integration-example.js",
+    "demo": "node integration-example.js",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "echo 'Unit tests not implemented yet'",
+    "test:integration": "echo 'Integration tests not implemented yet'",
+    "lint": "eslint . --ext .js",
+    "plugin:create": "node tools/create-plugin.js",
+    "plugin:validate": "node tools/validate-plugin.js",
+    "registry:sync": "node tools/sync-registry.js",
+    "docs:build": "echo 'Documentation build not implemented yet'"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "uuid": "^9.0.0",
+    "node-fetch": "^3.3.0",
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {
+    "eslint": "^8.50.0",
+    "@eslint/js": "^8.50.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.1"
+  },
+  "peerDependencies": {
+    "chrome": ">=100.0.0"
+  },
+  "directories": {
+    "lib": "./core",
+    "doc": "../docs",
+    "test": "./tests"
+  },
+  "files": [
+    "core/",
+    "plugins/",
+    "integration-example.js",
+    "../MODULE_F_README.md"
+  ],
+  "exports": {
+    ".": "./integration-example.js",
+    "./core/*": "./core/*",
+    "./plugins/*": "./plugins/*"
+  },
+  "homepage": "https://github.com/gmail-mcp/gmail-mcp-bridge",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gmail-mcp/gmail-mcp-bridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gmail-mcp/gmail-mcp-bridge/issues"
+  },
+  "config": {
+    "plugins": {
+      "directory": "./plugins",
+      "autoLoad": true,
+      "sandboxMode": true
+    },
+    "registry": {
+      "official": "https://registry.gmail-mcp.com",
+      "local": "./plugin-registry.json"
+    },
+    "services": {
+      "healthCheckInterval": 5000,
+      "discoveryStrategies": ["port-scan", "process-list"]
+    }
+  },
+  "funding": {
+    "type": "individual",
+    "url": "https://github.com/sponsors/gmail-mcp"
+  }
+}

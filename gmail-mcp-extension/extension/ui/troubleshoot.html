@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gmail MCP Bridge Troubleshoot</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f8fafc;
+      min-height: 100vh;
+      color: #334155;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      background: white;
+      padding: 30px;
+      border-radius: 16px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .header .subtitle {
+      font-size: 16px;
+      color: #64748b;
+    }
+
+    .diagnostic-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 768px) {
+      .diagnostic-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      border: 1px solid #e2e8f0;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status-badge.healthy {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .status-badge.warning {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .status-badge.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .status-badge.checking {
+      background: #e0f2fe;
+      color: #0c4a6e;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .diagnostic-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .diagnostic-item:last-child {
+      border-bottom: none;
+    }
+
+    .diagnostic-info {
+      flex: 1;
+    }
+
+    .diagnostic-name {
+      font-weight: 500;
+      color: #1e293b;
+      margin-bottom: 4px;
+    }
+
+    .diagnostic-desc {
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.4;
+    }
+
+    .diagnostic-status {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      margin-left: 12px;
+    }
+
+    .diagnostic-status.success {
+      background: #10b981;
+      color: white;
+    }
+
+    .diagnostic-status.error {
+      background: #ef4444;
+      color: white;
+    }
+
+    .diagnostic-status.checking {
+      background: #f59e0b;
+      color: white;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .actions-panel {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      border: 1px solid #e2e8f0;
+      margin-bottom: 24px;
+    }
+
+    .quick-fixes {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+
+    .fix-button {
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+
+    .fix-button:hover {
+      border-color: #3b82f6;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+    }
+
+    .fix-button.running {
+      border-color: #f59e0b;
+      background: #fefbf2;
+    }
+
+    .fix-button.success {
+      border-color: #10b981;
+      background: #f0fdf4;
+    }
+
+    .fix-button.error {
+      border-color: #ef4444;
+      background: #fef2f2;
+    }
+
+    .fix-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .fix-desc {
+      font-size: 14px;
+      color: #64748b;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+
+    .fix-status {
+      font-size: 13px;
+      font-weight: 500;
+      padding: 4px 8px;
+      border-radius: 6px;
+      display: inline-block;
+    }
+
+    .fix-status.idle {
+      background: #f1f5f9;
+      color: #475569;
+    }
+
+    .fix-status.running {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .fix-status.success {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .fix-status.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .logs-section {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      border: 1px solid #e2e8f0;
+    }
+
+    .logs-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .logs-controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2563eb;
+    }
+
+    .btn-secondary {
+      background: #f8fafc;
+      color: #64748b;
+      border: 1px solid #e2e8f0;
+    }
+
+    .btn-secondary:hover {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .log-viewer {
+      background: #1e293b;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 16px;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .log-entry {
+      margin-bottom: 8px;
+      opacity: 0;
+      animation: fadeIn 0.3s ease-in-out forwards;
+    }
+
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+
+    .log-entry.error {
+      color: #fca5a5;
+    }
+
+    .log-entry.warning {
+      color: #fcd34d;
+    }
+
+    .log-entry.success {
+      color: #86efac;
+    }
+
+    .log-entry.info {
+      color: #93c5fd;
+    }
+
+    .expert-mode {
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 24px;
+      border: 2px dashed #cbd5e1;
+    }
+
+    .expert-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      cursor: pointer;
+      color: #64748b;
+      font-weight: 500;
+    }
+
+    .expert-content {
+      display: none;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    .expert-content.active {
+      display: block;
+    }
+
+    .command-group {
+      margin-bottom: 20px;
+    }
+
+    .command-group h4 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 12px;
+    }
+
+    .command-item {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 12px;
+      border-radius: 6px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 13px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: between;
+      align-items: center;
+    }
+
+    .command-text {
+      flex: 1;
+    }
+
+    .copy-btn {
+      background: #475569;
+      border: none;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      margin-left: 12px;
+    }
+
+    .copy-btn:hover {
+      background: #64748b;
+    }
+
+    .alert {
+      padding: 16px;
+      border-radius: 8px;
+      margin: 16px 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .alert-info {
+      background: #f0f9ff;
+      border: 1px solid #7dd3fc;
+      color: #0c4a6e;
+    }
+
+    .alert-success {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #166534;
+    }
+
+    .alert-warning {
+      background: #fffbeb;
+      border: 1px solid #fed7aa;
+      color: #92400e;
+    }
+
+    .alert-error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="#ef4444">
+          <path d="M12 2L2 19h20L12 2zm0 15h-2v-2h2v2zm0-4h-2V9h2v4z"/>
+        </svg>
+        System Diagnostics
+      </h1>
+      <div class="subtitle">Identify and fix Gmail MCP Bridge issues</div>
+    </div>
+
+    <div class="diagnostic-grid">
+      <!-- System Health Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+            System Health
+          </div>
+          <div id="system-badge" class="status-badge checking">Checking</div>
+        </div>
+        
+        <div id="system-diagnostics">
+          <div class="diagnostic-item">
+            <div class="diagnostic-info">
+              <div class="diagnostic-name">Extension Status</div>
+              <div class="diagnostic-desc">Chrome extension connectivity</div>
+            </div>
+            <div id="ext-status" class="diagnostic-status checking">?</div>
+          </div>
+          
+          <div class="diagnostic-item">
+            <div class="diagnostic-info">
+              <div class="diagnostic-name">Bridge Server</div>
+              <div class="diagnostic-desc">MCP server connection and health</div>
+            </div>
+            <div id="bridge-status" class="diagnostic-status checking">?</div>
+          </div>
+          
+          <div class="diagnostic-item">
+            <div class="diagnostic-info">
+              <div class="diagnostic-name">Gmail Access</div>
+              <div class="diagnostic-desc">Gmail tab and permissions</div>
+            </div>
+            <div id="gmail-status" class="diagnostic-status checking">?</div>
+          </div>
+          
+          <div class="diagnostic-item">
+            <div class="diagnostic-info">
+              <div class="diagnostic-name">Claude Integration</div>
+              <div class="diagnostic-desc">Claude Desktop configuration</div>
+            </div>
+            <div id="claude-status" class="diagnostic-status checking">?</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Performance Metrics Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 3v6h6M21 21v-6h-6M3 9l9-9 9 9-9 9-9-9z"/>
+            </svg>
+            Performance
+          </div>
+          <div id="perf-badge" class="status-badge checking">Analyzing</div>
+        </div>
+        
+        <div id="performance-metrics">
+          <div class="diagnostic-item">
+            <div class="diagnostic-info">
+              <div class="diagnostic-name">Response Time</div>
+              <div class="diagnostic-desc" id="response-time-desc">Measuring API latency</div>
+            </div>
+            <div id="response-time-status" class="diagnostic-status checking">?</div>
+          </div>
+          
+          <div class="diagnostic-item">
+            <div class="diagnostic-info">
+              <div class="diagnostic-name">Memory Usage</div>
+              <div class="diagnostic-desc" id="memory-desc">Extension memory consumption</div>
+            </div>
+            <div id="memory-status" class="diagnostic-status checking">?</div>
+          </div>
+          
+          <div class="diagnostic-item">
+            <div class="diagnostic-info">
+              <div class="diagnostic-name">Error Rate</div>
+              <div class="diagnostic-desc" id="error-rate-desc">Failed requests percentage</div>
+            </div>
+            <div id="error-rate-status" class="diagnostic-status checking">?</div>
+          </div>
+          
+          <div class="diagnostic-item">
+            <div class="diagnostic-info">
+              <div class="diagnostic-name">Uptime</div>
+              <div class="diagnostic-desc" id="uptime-desc">System availability</div>
+            </div>
+            <div id="uptime-status" class="diagnostic-status checking">?</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Fixes Panel -->
+    <div class="actions-panel">
+      <h2 style="font-size: 20px; font-weight: 600; color: #1e293b; margin-bottom: 8px;">Quick Fixes</h2>
+      <p style="color: #64748b; margin-bottom: 20px;">Try these automated solutions for common issues</p>
+      
+      <div class="quick-fixes">
+        <button class="fix-button" id="fix-restart-bridge" data-fix="restart-bridge">
+          <div class="fix-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3.68 11.12h-.01m.01 0A8.32 8.32 0 0112 3.68a8.32 8.32 0 018.32 8.32"/>
+            </svg>
+            Restart Bridge Server
+          </div>
+          <div class="fix-desc">Restart the MCP server to resolve connection issues</div>
+          <div class="fix-status idle">Ready to run</div>
+        </button>
+
+        <button class="fix-button" id="fix-clear-cache" data-fix="clear-cache">
+          <div class="fix-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/>
+            </svg>
+            Clear Extension Cache
+          </div>
+          <div class="fix-desc">Clear stored data and reset extension state</div>
+          <div class="fix-status idle">Ready to run</div>
+        </button>
+
+        <button class="fix-button" id="fix-gmail-refresh" data-fix="gmail-refresh">
+          <div class="fix-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+            </svg>
+            Refresh Gmail Connection
+          </div>
+          <div class="fix-desc">Reload Gmail tabs and reinject content scripts</div>
+          <div class="fix-status idle">Ready to run</div>
+        </button>
+
+        <button class="fix-button" id="fix-permissions" data-fix="permissions">
+          <div class="fix-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            Check Permissions
+          </div>
+          <div class="fix-desc">Verify and request required extension permissions</div>
+          <div class="fix-status idle">Ready to run</div>
+        </button>
+      </div>
+    </div>
+
+    <!-- System Logs -->
+    <div class="logs-section">
+      <div class="logs-header">
+        <h3 style="font-size: 18px; font-weight: 600; color: #1e293b;">System Logs</h3>
+        <div class="logs-controls">
+          <button id="clear-logs" class="btn btn-secondary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/>
+            </svg>
+            Clear
+          </button>
+          <button id="export-logs" class="btn btn-secondary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+            </svg>
+            Export
+          </button>
+          <button id="auto-scroll" class="btn btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M7 13l3 3 7-7"/>
+            </svg>
+            Auto-scroll
+          </button>
+        </div>
+      </div>
+      
+      <div id="log-viewer" class="log-viewer">
+        <div class="log-entry info">[INFO] Starting diagnostic session...</div>
+        <div class="log-entry info">[INFO] Initializing system health checks...</div>
+      </div>
+    </div>
+
+    <!-- Expert Mode -->
+    <div class="expert-mode">
+      <div class="expert-toggle" onclick="toggleExpertMode()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9.88 9.88a3 3 0 104.24 4.24M9.88 9.88L12 12l4.24 4.24M9.88 9.88L12 7l4.24-4.24"/>
+        </svg>
+        <span>Advanced Troubleshooting</span>
+        <svg id="expert-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition: transform 0.2s;">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </div>
+      
+      <div id="expert-content" class="expert-content">
+        <div class="alert alert-warning">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2L2 19h20L12 2zm0 15h-2v-2h2v2zm0-4h-2V9h2v4z"/>
+          </svg>
+          <div>
+            <strong>Advanced Mode:</strong> These commands are for experienced users. 
+            Please ensure you understand what each command does before running it.
+          </div>
+        </div>
+
+        <div class="command-group">
+          <h4>Manual Server Commands</h4>
+          <div class="command-item">
+            <div class="command-text">cd ~/CascadeProjects/gmail-mcp/gmail-mcp-extension/mcp-server && npm run bridge</div>
+            <button class="copy-btn" onclick="copyToClipboard(this)">Copy</button>
+          </div>
+          <div class="command-item">
+            <div class="command-text">lsof -ti:3456 | xargs kill -9</div>
+            <button class="copy-btn" onclick="copyToClipboard(this)">Copy</button>
+          </div>
+        </div>
+
+        <div class="command-group">
+          <h4>Configuration Files</h4>
+          <div class="command-item">
+            <div class="command-text">open ~/Library/Application\ Support/Claude/claude_desktop_config.json</div>
+            <button class="copy-btn" onclick="copyToClipboard(this)">Copy</button>
+          </div>
+          <div class="command-item">
+            <div class="command-text">cat ~/.bashrc | grep -i claude</div>
+            <button class="copy-btn" onclick="copyToClipboard(this)">Copy</button>
+          </div>
+        </div>
+
+        <div class="command-group">
+          <h4>Debug Information</h4>
+          <div class="command-item">
+            <div class="command-text">chrome://extensions/</div>
+            <button class="copy-btn" onclick="copyToClipboard(this)">Copy</button>
+          </div>
+          <div class="command-item">
+            <div class="command-text">node --version && npm --version</div>
+            <button class="copy-btn" onclick="copyToClipboard(this)">Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="troubleshoot.js"></script>
+</body>
+</html>

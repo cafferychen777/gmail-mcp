@@ -34,12 +34,14 @@ function initializeGmailInterface() {
     this.observer = null;
     this.accountInfo = null;  // 新增：账号信息
     this.tabId = null;        // 新增：标签页ID
+    this.labelManager = null; // 新增：标签管理器
     this.init();
   }
 
   async init() {
     console.log('Gmail MCP Bridge initialized');
     await this.detectAccount();     // 新增：检测账号
+    this.labelManager = new LabelManager(this); // 初始化标签管理器
     this.setupListeners();
     this.registerWithBackground();  // 新增：注册到background
   }
@@ -356,15 +358,23 @@ function initializeGmailInterface() {
             case 'replyEmail':
               const emailId = request.params?.emailId || request.emailId;
               const replyContent = request.params?.content || request.content;
-              await this.composeReply(emailId, replyContent);
-              responseData = { success: true };
+              const replyResult = await this.composeReply(emailId, replyContent);
+              responseData = { 
+                success: true, 
+                sent: replyResult?.sent || false,
+                message: replyResult?.message || 'Reply processed'
+              };
               break;
 
             case 'sendEmail':
-              await this.sendEmail(request.params?.to || request.to,
+              const sendResult = await this.sendEmail(request.params?.to || request.to,
                             request.params?.subject || request.subject,
                             request.params?.body || request.body);
-              responseData = { success: true, message: 'Email compose window opened' };
+              responseData = { 
+                success: true, 
+                sent: sendResult?.sent || false,
+                message: sendResult?.message || 'Email compose window opened'
+              };
               break;
 
             case 'debugPage':
@@ -422,6 +432,44 @@ function initializeGmailInterface() {
                 success: switchSuccess, 
                 currentView: this.detectViewState() 
               };
+              break;
+
+            // ========== 新增：标签管理功能 ==========
+            case 'listLabels':
+              responseData = await this.labelManager.listLabels();
+              break;
+              
+            case 'addLabelsToEmails':
+              const addEmailIds = request.params?.emailIds || request.emailIds;
+              const addLabels = request.params?.labels || request.labels;
+              responseData = await this.labelManager.manageEmailLabels(addEmailIds, addLabels, 'add');
+              break;
+              
+            case 'removeLabelsFromEmails':
+              const removeEmailIds = request.params?.emailIds || request.emailIds;
+              const removeLabels = request.params?.labels || request.labels;
+              responseData = await this.labelManager.manageEmailLabels(removeEmailIds, removeLabels, 'remove');
+              break;
+              
+            case 'searchByLabel':
+              const labelName = request.params?.labelName || request.labelName;
+              const labelLimit = request.params?.limit || request.limit || 50;
+              responseData = await this.labelManager.searchByLabel(labelName, labelLimit);
+              break;
+              
+            case 'createLabel':
+              const newLabelName = request.params?.labelName || request.labelName;
+              const parentLabel = request.params?.parentLabel || request.parentLabel;
+              responseData = await this.labelManager.createLabel(newLabelName, parentLabel);
+              break;
+
+            // ========== 新增：邮件转发功能 ==========
+            case 'forwardEmail':
+              const forwardEmailId = request.params?.emailId || request.emailId;
+              const forwardRecipients = request.params?.recipients || request.recipients;
+              const forwardMessage = request.params?.message || request.message || '';
+              const includeAttachments = request.params?.includeAttachments ?? true;
+              responseData = await this.forwardEmail(forwardEmailId, forwardRecipients, forwardMessage, includeAttachments);
               break;
 
             default:
@@ -603,13 +651,13 @@ function initializeGmailInterface() {
     }
     
     // 检查是否在合适的视图
-    const suitableViews = ['inbox', 'all', 'sent', 'drafts', 'starred', 'important'];
-    const problematicViews = ['search', 'label', 'category'];
+    const suitableViews = ['inbox', 'all', 'sent', 'drafts', 'starred', 'important', 'search'];
+    const problematicViews = ['label', 'category'];
 
     if (!suitableViews.includes(currentView)) {
       console.warn(`Not in a suitable view for email listing (current: ${currentView})`);
 
-      // 对于搜索视图，提供特殊处理
+      // 对于特殊视图的处理（搜索视图现在被支持）
       if (problematicViews.includes(currentView)) {
         console.log(`Detected ${currentView} view, attempting to switch to inbox...`);
 
@@ -636,7 +684,7 @@ function initializeGmailInterface() {
       // 对于其他不支持的视图
       return {
         emails: [],
-        error: `Cannot list emails in ${currentView} view. Please switch to inbox.`,
+        error: `Cannot list emails in ${currentView} view. Please switch to a supported view.`,
         currentView: currentView,
         supportedViews: suitableViews
       };
@@ -645,15 +693,23 @@ function initializeGmailInterface() {
     const emails = [];
 
     // 尝试多种选择器，Gmail可能使用不同的结构
+    // 为搜索结果添加更多选择器
     const selectors = [
       'tr.zA',  // 标准邮件行（最常见）
+      'tr[class*="zA"]',  // 搜索结果中的邮件行
+      'tr.zsO',  // 搜索结果特有的类
       'div[role="main"] tr[jsaction]',  // 备用选择器
       'tbody tr[class*="z"]',  // 更宽泛的选择器
       'div[gh="tl"] tr',  // 邮件列表容器
       'table.F tbody tr.zA',  // 完整路径
+      'table.F tbody tr[class*="z"]',  // 搜索结果中的表格行
       'div[role="list"] > div[role="listitem"]',  // 新版Gmail可能使用
       'tr[jsaction*="email"]',  // 包含email action的行
-      'div.Cp tbody tr'  // 另一种可能的容器
+      'tr[jsaction*="thread"]',  // 包含thread action的行（搜索结果）
+      'div.Cp tbody tr',  // 另一种可能的容器
+      'div[role="main"] tbody tr[class]',  // 搜索结果容器
+      '[data-legacy-thread-id]',  // 直接查找有thread-id的元素
+      'tr[data-thread-id]'  // 有thread-id属性的行
     ];
     
     let emailRows = null;
@@ -707,38 +763,74 @@ function initializeGmailInterface() {
 
     emailRows.forEach((row, index) => {
       try {
-        // Find the span with thread ID - 这是最可靠的标识符
+        // Find thread ID - support multiple ways to identify emails
+        let threadId = null;
+        let subject = 'No subject';
+        
+        // Try to find thread ID in multiple ways
         const threadSpan = row.querySelector('span[data-legacy-thread-id]');
-        if (!threadSpan) {
-          // 尝试其他方式获取ID
+        if (threadSpan) {
+          threadId = threadSpan.getAttribute('data-legacy-thread-id');
+          subject = threadSpan.textContent.trim();
+        } else {
+          // Try other thread ID attributes
           const idElement = row.querySelector('[data-thread-id]') || 
-                          row.querySelector('[data-message-id]');
-          if (!idElement) return;
+                          row.querySelector('[data-message-id]') ||
+                          row.querySelector('[jsaction*="thread"]');
+          if (idElement) {
+            threadId = idElement.getAttribute('data-thread-id') || 
+                      idElement.getAttribute('data-message-id') ||
+                      idElement.getAttribute('jsaction')?.match(/thread[_:]([\w-]+)/)?.[1];
+          }
+          
+          // If the row itself has a thread-id attribute
+          if (!threadId && row.hasAttribute('data-legacy-thread-id')) {
+            threadId = row.getAttribute('data-legacy-thread-id');
+          }
+          if (!threadId && row.hasAttribute('data-thread-id')) {
+            threadId = row.getAttribute('data-thread-id');
+          }
+          
+          // Fallback to index-based ID
+          if (!threadId) {
+            threadId = `email_${index}`;
+          }
+          
+          // Find subject in multiple ways
+          const subjectElement = row.querySelector('.y6') ||
+                               row.querySelector('span[data-legacy-thread-id]') ||
+                               row.querySelector('.bog') ||
+                               row.querySelector('[role="gridcell"] span') ||
+                               row.querySelector('td span[title]');
+          if (subjectElement) {
+            subject = subjectElement.textContent.trim() || subjectElement.getAttribute('title') || 'No subject';
+          }
         }
 
-        const threadId = threadSpan ? 
-          threadSpan.getAttribute('data-legacy-thread-id') : 
-          (row.querySelector('[data-thread-id]')?.getAttribute('data-thread-id') || 
-           `email_${index}`);
-           
-        const subject = threadSpan ? 
-          threadSpan.textContent.trim() : 
-          (row.querySelector('.y6')?.textContent.trim() || 'No subject');
-
-        // Find sender - 尝试多种选择器
+        // Find sender - 尝试多种选择器，包括搜索结果特有的结构
         const senderElement = row.querySelector('[email]') ||
                              row.querySelector('.yW span') ||
                              row.querySelector('.bA4 span') ||
-                             row.querySelector('.yX span');
+                             row.querySelector('.yX span') ||
+                             row.querySelector('.bA4') ||
+                             row.querySelector('.yW') ||
+                             row.querySelector('[role="gridcell"]:first-child span') ||
+                             row.querySelector('td:nth-child(2) span') ||
+                             row.querySelector('.a4W span');
         const sender = senderElement ?
           (senderElement.getAttribute('email') || 
            senderElement.getAttribute('name') ||
+           senderElement.getAttribute('title') ||
            senderElement.textContent.trim()) : 'Unknown';
 
-        // Find date
+        // Find date - 加强日期查找，支持搜索结果的不同格式
         const dateElement = row.querySelector('.xW span[title]') ||
                            row.querySelector('.xW') ||
-                           row.querySelector('[title*="202"]');  // 查找包含年份的元素
+                           row.querySelector('[title*="202"]') ||  // 查找包含年份的元素
+                           row.querySelector('[title*="Jan"], [title*="Feb"], [title*="Mar"], [title*="Apr"], [title*="May"], [title*="Jun"], [title*="Jul"], [title*="Aug"], [title*="Sep"], [title*="Oct"], [title*="Nov"], [title*="Dec"]') ||
+                           row.querySelector('td:last-child span[title]') ||
+                           row.querySelector('.xY span') ||
+                           row.querySelector('.xW span');
         const date = dateElement ?
           (dateElement.getAttribute('title') || dateElement.textContent.trim()) : 'Unknown';
 
@@ -1150,10 +1242,14 @@ function initializeGmailInterface() {
     console.log('Search options:', options);
 
     const limit = options.limit || 10;
+    let fullQuery = query; // Move outside try block to fix scope issue
+    const originalView = this.detectViewState();
+    const originalUrl = window.location.href;
+    
+    console.log(`Starting search from ${originalView} view`);
 
     try {
       // Build the full search query with options
-      let fullQuery = query;
 
       // Add additional filters from options
       if (options.from) {
@@ -1174,10 +1270,26 @@ function initializeGmailInterface() {
 
       console.log('Full search query:', fullQuery);
 
-      // Find the search box
-      const searchBox = document.querySelector('input[aria-label*="Search"]') ||
-                       document.querySelector('input[name="q"]') ||
-                       document.querySelector('.gb_hf');
+      // Find the search box with improved selectors
+      const searchSelectors = [
+        'input[aria-label*="Search"]',
+        'input[name="q"]',
+        'input[placeholder*="Search"]',
+        '.gb_hf input',
+        '.gb_hf',
+        'form[role="search"] input',
+        '.aAy input',
+        '#gs_lc50 input'
+      ];
+      
+      let searchBox = null;
+      for (const selector of searchSelectors) {
+        searchBox = document.querySelector(selector);
+        if (searchBox && searchBox.offsetParent !== null) {
+          console.log(`Found search box with selector: ${selector}`);
+          break;
+        }
+      }
 
       if (!searchBox) {
         throw new Error('Could not find search box');
@@ -1202,8 +1314,36 @@ function initializeGmailInterface() {
       });
       searchBox.dispatchEvent(enterEvent);
 
-      // Wait for search results to load
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Wait for search results to load with dynamic waiting
+      console.log('Waiting for search results to load...');
+      let waitTime = 0;
+      const maxWaitTime = 10000; // 10 seconds max
+      const checkInterval = 500; // Check every 500ms
+      
+      while (waitTime < maxWaitTime) {
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+        waitTime += checkInterval;
+        
+        // Check if URL changed to search results
+        const currentUrl = window.location.href;
+        if (currentUrl.includes('#search/')) {
+          console.log('Search results page loaded');
+          // Give a bit more time for results to render
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          break;
+        }
+        
+        // Check if loading indicators are gone
+        const loadingIndicators = document.querySelectorAll('.K0', '.WoWk4d');
+        if (loadingIndicators.length === 0) {
+          console.log('Loading indicators disappeared');
+          break;
+        }
+      }
+      
+      if (waitTime >= maxWaitTime) {
+        console.warn('Search timeout reached');
+      }
 
       // Get search results - safely handle getEmailList return format
       const emailListResult = this.getEmailList();
@@ -1237,13 +1377,39 @@ function initializeGmailInterface() {
         query: fullQuery,
         results: emails,
         count: emails.length,
-        url: window.location.href
+        url: window.location.href,
+        searchTime: new Date().toISOString(),
+        debug: {
+          originalQuery: query,
+          finalQuery: fullQuery,
+          searchOptions: options,
+          limit: limit,
+          emailListFormat: Array.isArray(emailListResult) ? 'array' : 'object',
+          currentView: this.detectViewState()
+        }
       };
 
       if (errorInfo) {
         result.warning = errorInfo;
       }
 
+      console.log(`Search completed: found ${emails.length} results for "${fullQuery}"`);
+      
+      // Optionally return to original view if user prefers it
+      // This is disabled by default to allow users to see search results
+      if (options.returnToOriginalView && originalUrl !== window.location.href) {
+        console.log(`Returning to original view: ${originalView}`);
+        try {
+          window.location.href = originalUrl;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (error) {
+          console.warn('Failed to return to original view:', error);
+          result.warning = result.warning ? 
+            `${result.warning}; Failed to return to original view` : 
+            'Failed to return to original view';
+        }
+      }
+      
       return result;
 
     } catch (error) {
@@ -1253,7 +1419,16 @@ function initializeGmailInterface() {
         results: [],
         count: 0,
         error: `Search failed: ${error.message}`,
-        url: window.location.href
+        url: window.location.href,
+        searchTime: new Date().toISOString(),
+        debug: {
+          originalQuery: query,
+          finalQuery: fullQuery || query,
+          searchOptions: options,
+          errorStack: error.stack,
+          currentView: this.detectViewState(),
+          errorName: error.name
+        }
       };
     }
   }
@@ -1713,6 +1888,681 @@ function initializeGmailInterface() {
     };
     
     return typeMap[extension] || 'unknown';
+  }
+
+  // ==================== P0级核心功能实现 ====================
+  
+  // Gmail标签管理系统 - 完整CRUD操作支持
+  createLabelManager() {
+    return new LabelManager(this);
+  }
+
+  // 邮件转发功能 - 基于现有composeReply架构
+  async forwardEmail(emailId, recipients, message = '', includeAttachments = true) {
+    console.log(`Forwarding email ${emailId} to ${recipients}`);
+    console.log('Forward message:', message);
+
+    try {
+      // 首先确保邮件已打开
+      const emailData = await this.getEmailContent(emailId);
+      
+      if (!emailData || emailData.error) {
+        throw new Error(`Failed to open email: ${emailData?.error || 'Unknown error'}`);
+      }
+
+      // 等待邮件完全加载
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // 查找转发按钮 - 使用多选择器容错策略
+      const forwardSelectors = [
+        '[aria-label*="Forward"]',
+        '[data-tooltip*="Forward"]',
+        'div[role="button"][aria-label*="Forward"]',
+        'span[role="button"][aria-label*="Forward"]',
+        '.ams.bkH:nth-child(3)',  // 通常转发按钮是第三个
+        '.T-I.J-J5-Ji.T-I-Js-IF.aaq.T-I-ax7.L3'  // Gmail的转发按钮CSS类
+      ];
+
+      let forwardButton = null;
+      for (const selector of forwardSelectors) {
+        const buttons = document.querySelectorAll(selector);
+        for (const button of buttons) {
+          if (button && button.offsetParent !== null && 
+              (button.textContent.toLowerCase().includes('forward') || 
+               button.getAttribute('aria-label')?.toLowerCase().includes('forward'))) {
+            forwardButton = button;
+            console.log(`Found forward button with selector: ${selector}`);
+            break;
+          }
+        }
+        if (forwardButton) break;
+      }
+
+      if (!forwardButton) {
+        // 尝试在邮件操作区域查找转发按钮
+        const actionsArea = document.querySelector('.iN') || document.querySelector('.btb');
+        if (actionsArea) {
+          const actionButtons = actionsArea.querySelectorAll('[role="button"]');
+          for (const button of actionButtons) {
+            if (button.getAttribute('aria-label')?.toLowerCase().includes('forward')) {
+              forwardButton = button;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!forwardButton) {
+        throw new Error('Could not find forward button. Make sure the email is open.');
+      }
+
+      // 点击转发按钮
+      forwardButton.click();
+      console.log('Forward button clicked');
+
+      // 等待转发窗口打开
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // 填写收件人 - 支持多个收件人
+      const recipientList = Array.isArray(recipients) ? recipients.join(', ') : recipients;
+      
+      if (recipientList) {
+        const toSelectors = [
+          'textarea[name="to"]',
+          'input[name="to"]',
+          '[aria-label*="To"][role="combobox"]',
+          '[aria-label="To"]',
+          'div[name="to"]'
+        ];
+
+        let toField = null;
+        for (const selector of toSelectors) {
+          toField = document.querySelector(selector);
+          if (toField) {
+            console.log(`Found To field with selector: ${selector}`);
+            break;
+          }
+        }
+
+        if (toField) {
+          toField.focus();
+          toField.value = recipientList;
+          toField.dispatchEvent(new Event('input', { bubbles: true }));
+          toField.dispatchEvent(new Event('change', { bubbles: true }));
+          // Tab到下一字段
+          toField.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+        } else {
+          console.warn('Could not find To field in forward window');
+        }
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // 添加转发消息（如果提供）
+      if (message) {
+        const bodySelectors = [
+          '[aria-label="Message Body"]',
+          '[aria-label*="Message body"]',
+          'div[role="textbox"][aria-label*="Message"]',
+          'div[contenteditable="true"][role="textbox"]',
+          '.Am.Al.editable',
+          '.editable[contenteditable="true"]'
+        ];
+
+        let bodyField = null;
+        let attempts = 0;
+        const maxAttempts = 5;
+
+        // 尝试多次找到正文字段（转发窗口可能加载较慢）
+        while (!bodyField && attempts < maxAttempts) {
+          for (const selector of bodySelectors) {
+            bodyField = document.querySelector(selector);
+            if (bodyField && bodyField.offsetParent !== null) {
+              console.log(`Found body field with selector: ${selector}`);
+              break;
+            }
+          }
+          
+          if (!bodyField) {
+            attempts++;
+            console.log(`Body field not found, attempt ${attempts}/${maxAttempts}`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+
+        if (bodyField) {
+          bodyField.focus();
+          
+          // 在转发内容前添加消息
+          const formattedMessage = message.replace(/\n/g, '<br>');
+          const currentContent = bodyField.innerHTML;
+          
+          // 插入转发消息在现有内容前面
+          bodyField.innerHTML = `${formattedMessage}<br><br>${currentContent}`;
+          
+          bodyField.dispatchEvent(new Event('input', { bubbles: true }));
+          bodyField.dispatchEvent(new Event('change', { bubbles: true }));
+        } else {
+          console.warn('Could not find body field in forward window');
+        }
+      }
+
+      console.log('Forward window opened and filled successfully');
+      
+      // 等待Gmail处理所有字段
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // 查找并点击发送按钮
+      const sendButtonSelectors = [
+        '[aria-label*="Send"]',
+        '[data-tooltip*="Send"]',
+        'div[role="button"][aria-label*="Send"]',
+        '.T-I.J-J5-Ji.aoO.v7.T-I-atl.L3',
+        'div.dC > div.gU.Up > div > div.btA > div[role="button"]:nth-child(1)',
+        'div[data-tooltip-delay="800"]'
+      ];
+      
+      let sendButton = null;
+      for (const selector of sendButtonSelectors) {
+        const buttons = document.querySelectorAll(selector);
+        for (const button of buttons) {
+          // 检查是否可见且包含Send文本/图标
+          if (button.offsetParent !== null && 
+              (button.textContent.includes('Send') || 
+               button.getAttribute('aria-label')?.includes('Send'))) {
+            sendButton = button;
+            console.log(`Found send button with selector: ${selector}`);
+            break;
+          }
+        }
+        if (sendButton) break;
+      }
+      
+      if (sendButton) {
+        console.log('Clicking send button...');
+        sendButton.click();
+        
+        // 等待邮件发送
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        return {
+          success: true,
+          message: 'Email forwarded successfully',
+          emailId: emailId,
+          recipients: recipientList,
+          sent: true
+        };
+      } else {
+        console.warn('Could not find send button, email saved as draft');
+        return {
+          success: true,
+          message: 'Forward saved as draft (send button not found)',
+          emailId: emailId,
+          recipients: recipientList,
+          sent: false
+        };
+      }
+      
+    } catch (error) {
+      console.error('Error in forwardEmail:', error);
+      throw error;
+    }
+  }
+}
+
+// ==================== LabelManager类 - Gmail标签系统完整集成 ====================
+class LabelManager {
+  constructor(gmailInterface) {
+    this.gmail = gmailInterface;
+    console.log('LabelManager initialized');
+  }
+
+  // 获取所有Gmail标签（系统+自定义）
+  async listLabels() {
+    console.log('Listing Gmail labels...');
+    
+    try {
+      // 确保在合适的视图
+      const currentView = this.gmail.detectViewState();
+      if (!['inbox', 'all', 'sent', 'drafts'].includes(currentView)) {
+        await this.gmail.switchToView('inbox');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      const labels = { system: [], custom: [], total: 0 };
+      
+      // 多种选择器策略来找到标签
+      const labelSelectors = [
+        // 侧边栏标签列表
+        'div[role="navigation"] [role="link"]',
+        'div[role="navigation"] a[aria-label]',
+        '.TK .TO .nZ',  // Gmail侧边栏标签
+        '.aip .aim .n0',  // 更新版Gmail标签
+        '[data-tooltip*="label"]',
+        // 标签下拉菜单（如果打开）
+        '.J-M.J-M-JJ .J-N:not(.J-N-JT)',
+        // 搜索建议中的标签
+        '.aZo[role="listbox"] .aZf'
+      ];
+
+      // 首先尝试从侧边栏获取可见标签
+      let foundLabels = new Set();
+      
+      for (const selector of labelSelectors) {
+        const elements = document.querySelectorAll(selector);
+        console.log(`Found ${elements.length} elements with selector: ${selector}`);
+        
+        elements.forEach((element) => {
+          try {
+            const labelText = element.textContent?.trim() || 
+                            element.getAttribute('aria-label') ||
+                            element.getAttribute('title');
+            
+            if (labelText && labelText.length > 0 && 
+                !foundLabels.has(labelText) &&
+                !this.isExcludedLabel(labelText)) {
+              
+              const labelInfo = {
+                name: labelText,
+                displayName: labelText,
+                type: this.getLabelType(labelText),
+                href: element.href || null,
+                unreadCount: this.extractUnreadCount(element),
+                isVisible: element.offsetParent !== null
+              };
+              
+              if (labelInfo.type === 'system') {
+                labels.system.push(labelInfo);
+              } else {
+                labels.custom.push(labelInfo);
+              }
+              
+              foundLabels.add(labelText);
+            }
+          } catch (error) {
+            console.warn('Error processing label element:', error);
+          }
+        });
+      }
+
+      // 尝试通过Gmail的内部API获取更完整的标签列表
+      await this.tryGetLabelsFromGmailAPI(labels, foundLabels);
+      
+      // 尝试通过标签菜单获取更多标签
+      await this.tryGetLabelsFromLabelMenu(labels, foundLabels);
+
+      labels.total = labels.system.length + labels.custom.length;
+      
+      console.log(`Found ${labels.total} labels: ${labels.system.length} system, ${labels.custom.length} custom`);
+      
+      return {
+        success: true,
+        labels: labels,
+        timestamp: new Date().toISOString(),
+        currentView: this.gmail.detectViewState()
+      };
+      
+    } catch (error) {
+      console.error('Error listing labels:', error);
+      return {
+        success: false,
+        error: error.message,
+        labels: { system: [], custom: [], total: 0 }
+      };
+    }
+  }
+
+  // 尝试从Gmail内部API获取标签
+  async tryGetLabelsFromGmailAPI(labels, foundLabels) {
+    try {
+      // 检查Gmail内部对象是否可用
+      if (window.GM && window.GM.getLabels) {
+        const gmailLabels = window.GM.getLabels();
+        gmailLabels.forEach(label => {
+          if (!foundLabels.has(label.name)) {
+            const labelInfo = {
+              name: label.name,
+              displayName: label.displayName || label.name,
+              type: label.type || this.getLabelType(label.name),
+              unreadCount: label.unreadCount || 0,
+              isVisible: true,
+              gmailId: label.id
+            };
+            
+            if (labelInfo.type === 'system') {
+              labels.system.push(labelInfo);
+            } else {
+              labels.custom.push(labelInfo);
+            }
+            
+            foundLabels.add(label.name);
+          }
+        });
+      }
+    } catch (error) {
+      console.log('Gmail internal API not available:', error.message);
+    }
+  }
+
+  // 尝试从标签菜单获取标签
+  async tryGetLabelsFromLabelMenu(labels, foundLabels) {
+    try {
+      // 查找标签菜单按钮
+      const labelMenuButton = document.querySelector('.ar9.T-I-J3.J-J5-Ji') || 
+                             document.querySelector('[aria-label*="Label"]') ||
+                             document.querySelector('[data-tooltip*="Labels"]');
+      
+      if (labelMenuButton) {
+        // 临时点击菜单按钮获取标签列表
+        labelMenuButton.click();
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // 查找菜单中的标签
+        const menuLabels = document.querySelectorAll('.J-N:not(.J-N-JT)');
+        menuLabels.forEach(labelElement => {
+          const labelText = labelElement.textContent?.trim();
+          if (labelText && !foundLabels.has(labelText) && !this.isExcludedLabel(labelText)) {
+            const labelInfo = {
+              name: labelText,
+              displayName: labelText,
+              type: this.getLabelType(labelText),
+              unreadCount: 0,
+              isVisible: true
+            };
+            
+            if (labelInfo.type === 'system') {
+              labels.system.push(labelInfo);
+            } else {
+              labels.custom.push(labelInfo);
+            }
+            
+            foundLabels.add(labelText);
+          }
+        });
+        
+        // 关闭菜单
+        document.addEventListener('click', (e) => {
+          if (!e.target.closest('.J-M')) {
+            // 点击菜单外部关闭
+          }
+        }, { once: true });
+        
+        // 按ESC关闭菜单
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      }
+    } catch (error) {
+      console.log('Could not access label menu:', error.message);
+    }
+  }
+
+  // 批量标签操作：add/remove/replace
+  async manageEmailLabels(emailIds, labels, action = 'add') {
+    console.log(`${action} labels [${labels.join(', ')}] to/from ${emailIds.length} emails`);
+    
+    const results = [];
+    const labelArray = Array.isArray(labels) ? labels : [labels];
+    const emailArray = Array.isArray(emailIds) ? emailIds : [emailIds];
+    
+    for (const emailId of emailArray) {
+      try {
+        const result = await this.manageSingleEmailLabels(emailId, labelArray, action);
+        results.push({ emailId, success: result.success, message: result.message });
+      } catch (error) {
+        results.push({ emailId, success: false, error: error.message });
+      }
+    }
+    
+    const successCount = results.filter(r => r.success).length;
+    
+    return {
+      success: successCount > 0,
+      results: results,
+      totalProcessed: emailArray.length,
+      successCount: successCount,
+      action: action,
+      labels: labelArray
+    };
+  }
+
+  // 单个邮件的标签操作
+  async manageSingleEmailLabels(emailId, labels, action) {
+    // 找到邮件行
+    const emailRow = document.querySelector(`span[data-legacy-thread-id="${emailId}"]`)?.closest('tr.zA');
+    
+    if (!emailRow) {
+      throw new Error('Email not found');
+    }
+    
+    // 选择邮件
+    const checkbox = emailRow.querySelector('input[type="checkbox"]');
+    if (checkbox && !checkbox.checked) {
+      checkbox.click();
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    
+    try {
+      if (action === 'add') {
+        return await this.addLabelsToSelectedEmails(labels);
+      } else if (action === 'remove') {
+        return await this.removeLabelsFromSelectedEmails(labels);
+      } else if (action === 'replace') {
+        // 先移除所有标签，再添加新标签
+        await this.removeAllLabelsFromSelectedEmails();
+        return await this.addLabelsToSelectedEmails(labels);
+      }
+    } finally {
+      // 取消选择邮件
+      if (checkbox && checkbox.checked) {
+        checkbox.click();
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+  }
+
+  // 添加标签到选中的邮件
+  async addLabelsToSelectedEmails(labels) {
+    // 查找标签按钮
+    const labelButton = document.querySelector('.ar9.T-I-J3.J-J5-Ji') ||
+                       document.querySelector('[aria-label*="Label"]') ||
+                       document.querySelector('[data-tooltip*="Labels"]');
+    
+    if (!labelButton) {
+      throw new Error('Label button not found');
+    }
+    
+    labelButton.click();
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // 在标签菜单中查找并点击指定标签
+    for (const labelName of labels) {
+      const labelElement = this.findLabelInMenu(labelName);
+      if (labelElement) {
+        labelElement.click();
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    }
+    
+    // 关闭菜单
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    
+    return { success: true, message: `Added labels: ${labels.join(', ')}` };
+  }
+
+  // 从选中的邮件移除标签
+  async removeLabelsFromSelectedEmails(labels) {
+    // 类似添加标签的逻辑，但是点击已选中的标签来取消选择
+    const labelButton = document.querySelector('.ar9.T-I-J3.J-J5-Ji') ||
+                       document.querySelector('[aria-label*="Label"]') ||
+                       document.querySelector('[data-tooltip*="Labels"]');
+    
+    if (!labelButton) {
+      throw new Error('Label button not found');
+    }
+    
+    labelButton.click();
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // 在标签菜单中查找并取消选择指定标签
+    for (const labelName of labels) {
+      const labelElement = this.findLabelInMenu(labelName);
+      if (labelElement && labelElement.querySelector('.J-N-Jz')) { // 已选中的标签
+        labelElement.click();
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    }
+    
+    // 关闭菜单
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    
+    return { success: true, message: `Removed labels: ${labels.join(', ')}` };
+  }
+
+  // 基于标签的邮件搜索
+  async searchByLabel(labelName, limit = 50) {
+    console.log(`Searching emails with label: ${labelName}`);
+    
+    try {
+      // 使用Gmail搜索语法
+      const searchQuery = `label:${labelName}`;
+      
+      // 复用现有的搜索功能
+      const searchResult = await this.gmail.searchEmails(searchQuery, { limit: limit });
+      
+      return {
+        success: true,
+        label: labelName,
+        emails: searchResult.results || [],
+        count: searchResult.count || 0,
+        searchQuery: searchResult.query,
+        url: searchResult.url
+      };
+      
+    } catch (error) {
+      console.error('Error searching by label:', error);
+      return {
+        success: false,
+        error: error.message,
+        label: labelName,
+        emails: []
+      };
+    }
+  }
+
+  // 创建新标签（如果Gmail支持）
+  async createLabel(labelName, parentLabel = null) {
+    console.log(`Creating label: ${labelName}${parentLabel ? ` under ${parentLabel}` : ''}`);
+    
+    try {
+      // 查找标签设置或创建标签的入口
+      // Gmail通常在设置中或通过右键菜单创建标签
+      
+      // 方法1: 尝试通过设置页面
+      const settingsResult = await this.tryCreateLabelViaSettings(labelName, parentLabel);
+      if (settingsResult.success) {
+        return settingsResult;
+      }
+      
+      // 方法2: 尝试通过键盘快捷键
+      const shortcutResult = await this.tryCreateLabelViaShortcut(labelName, parentLabel);
+      if (shortcutResult.success) {
+        return shortcutResult;
+      }
+      
+      return {
+        success: false,
+        error: 'Unable to create label. Please create labels manually in Gmail settings.',
+        labelName: labelName,
+        suggestion: 'Go to Gmail Settings > Labels to create custom labels'
+      };
+      
+    } catch (error) {
+      console.error('Error creating label:', error);
+      return {
+        success: false,
+        error: error.message,
+        labelName: labelName
+      };
+    }
+  }
+
+  // 尝试通过Gmail设置创建标签
+  async tryCreateLabelViaSettings(labelName, parentLabel) {
+    // 这个功能需要导航到Gmail设置页面，实现较复杂
+    // 对于P0版本，我们返回指导信息
+    return {
+      success: false,
+      message: 'Label creation requires manual setup in Gmail settings'
+    };
+  }
+
+  // 尝试通过快捷键创建标签
+  async tryCreateLabelViaShortcut(labelName, parentLabel) {
+    // Gmail的 'l' 键通常用于标签操作
+    // 但创建新标签通常需要通过设置页面
+    return {
+      success: false,
+      message: 'Label creation via shortcut not supported'
+    };
+  }
+
+  // 辅助方法：判断标签类型
+  getLabelType(labelName) {
+    const systemLabels = [
+      'Inbox', 'Sent', 'Drafts', 'Trash', 'Spam', 'Starred', 'Important',
+      'Unread', 'All Mail', 'Chats', 'Snoozed', 'Scheduled',
+      'Promotions', 'Social', 'Updates', 'Forums', 'Primary',
+      '收件箱', '已发送', '草稿', '垃圾箱', '垃圾邮件', '已加星标', '重要', 
+      '未读', '所有邮件', '聊天', '稍后处理', '已计划'
+    ];
+    
+    return systemLabels.includes(labelName) ? 'system' : 'custom';
+  }
+
+  // 辅助方法：排除不相关的标签文本
+  isExcludedLabel(labelText) {
+    const excludePatterns = [
+      'Compose', 'Settings', 'Help', 'More', 'Less',
+      '撰写', '设置', '帮助', '更多', '收起',
+      'Gmail', 'Google', 'Account'
+    ];
+    
+    return excludePatterns.some(pattern => labelText.includes(pattern)) ||
+           labelText.length < 2 || 
+           /^\d+$/.test(labelText); // 排除纯数字
+  }
+
+  // 辅助方法：提取未读数量
+  extractUnreadCount(element) {
+    try {
+      // 查找未读数量指示器
+      const unreadIndicator = element.querySelector('.bsU') || 
+                            element.querySelector('[class*="unread"]') ||
+                            element.querySelector('.n0:last-child');
+      
+      if (unreadIndicator) {
+        const countText = unreadIndicator.textContent?.trim();
+        const count = parseInt(countText);
+        return isNaN(count) ? 0 : count;
+      }
+      
+      return 0;
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  // 辅助方法：在标签菜单中查找标签
+  findLabelInMenu(labelName) {
+    const menuLabels = document.querySelectorAll('.J-N:not(.J-N-JT)');
+    
+    for (const labelElement of menuLabels) {
+      const labelText = labelElement.textContent?.trim();
+      if (labelText === labelName) {
+        return labelElement;
+      }
+    }
+    
+    return null;
   }
 }
 

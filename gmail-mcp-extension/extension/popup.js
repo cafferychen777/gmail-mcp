@@ -1,43 +1,82 @@
-// Check and display connection status
+// 现代化的状态管理 - 使用新的StatusManager
+function initializeStatusManager() {
+  // 加载状态管理器
+  const script = document.createElement('script');
+  script.src = 'core/status-manager.js';
+  script.onload = function() {
+    const statusManager = window.statusManager;
+    
+    // 监听状态变化
+    statusManager.addListener((state) => {
+      updateConnectionDisplay(statusManager.getDisplayInfo());
+    });
+    
+    // 开始自动检查
+    statusManager.startAutoCheck();
+  };
+  document.head.appendChild(script);
+}
+
+// 更简洁的状态显示更新
+function updateConnectionDisplay(displayInfo) {
+  const statusDot = document.getElementById('status-dot');
+  const statusText = document.getElementById('status-text');
+  const statusDetails = document.getElementById('status-details');
+  const helpSection = document.getElementById('help-section');
+  
+  statusDot.className = `status-dot ${displayInfo.dot}`;
+  statusText.textContent = displayInfo.text;
+  statusDetails.textContent = displayInfo.details;
+  helpSection.style.display = displayInfo.showHelp ? 'block' : 'none';
+}
+
+// 向后兼容的更新函数
 function updateConnectionStatus() {
-  chrome.runtime.sendMessage({ action: 'checkConnection' }, (response) => {
-    const statusDot = document.getElementById('status-dot');
-    const statusText = document.getElementById('status-text');
-    const statusDetails = document.getElementById('status-details');
-    const helpSection = document.getElementById('help-section');
+  // 如果状态管理器已加载，使用它
+  if (window.statusManager) {
+    window.statusManager.checkConnection();
+  } else {
+    // 否则使用原始逻辑作为后备
+    chrome.runtime.sendMessage({ action: 'checkConnection' }, (response) => {
+      const displayInfo = parseResponse(response);
+      updateConnectionDisplay(displayInfo);
+    });
+  }
+}
+
+function parseResponse(response) {
+  if (chrome.runtime.lastError || !response) {
+    return {
+      dot: 'disconnected',
+      text: 'Extension Error',
+      details: chrome.runtime.lastError?.message || 'Cannot communicate with extension',
+      showHelp: true
+    };
+  }
+  
+  if (response.connected) {
+    return {
+      dot: 'connected',
+      text: 'Connected',
+      details: 'Bridge server is running and Gmail is connected',
+      showHelp: false
+    };
+  } else {
+    let text, details;
     
-    if (chrome.runtime.lastError || !response) {
-      // Extension error
-      statusDot.className = 'status-dot disconnected';
-      statusText.textContent = 'Extension Error';
-      statusDetails.textContent = chrome.runtime.lastError?.message || 'Cannot communicate with extension';
-      helpSection.style.display = 'block';
-      return;
-    }
-    
-    if (response.connected) {
-      // Connected
-      statusDot.className = 'status-dot connected';
-      statusText.textContent = 'Connected';
-      statusDetails.textContent = 'Bridge server is running and Gmail is connected';
-      helpSection.style.display = 'none';
+    if (!response.polling) {
+      text = 'Bridge Not Started';
+      details = 'Bridge server polling has not started';
+    } else if (!response.healthy) {
+      text = 'Bridge Server Offline';
+      details = response.lastError || 'Cannot connect to bridge server on port 3456';
     } else {
-      // Not connected
-      statusDot.className = 'status-dot disconnected';
-      
-      if (!response.polling) {
-        statusText.textContent = 'Bridge Not Started';
-        statusDetails.textContent = 'Bridge server polling has not started';
-      } else if (!response.healthy) {
-        statusText.textContent = 'Bridge Server Offline';
-        statusDetails.textContent = response.lastError || 'Cannot connect to bridge server on port 3456';
-      } else {
-        statusText.textContent = 'Waiting for Connection';
-        statusDetails.textContent = 'Bridge server is running but waiting for connection';
-      }
-      helpSection.style.display = 'block';
+      text = 'Waiting for Connection';
+      details = 'Bridge server is running but waiting for connection';
     }
-  });
+    
+    return { dot: 'disconnected', text, details, showHelp: true };
+  }
 }
 
 // Refresh button functionality
@@ -62,8 +101,16 @@ document.getElementById('refresh-btn').addEventListener('click', function() {
   }, 1000);
 });
 
-// Check status on load
-updateConnectionStatus();
+// 初始化时优先使用新的状态管理器
+document.addEventListener('DOMContentLoaded', () => {
+  initializeStatusManager();
+});
 
-// Auto-refresh every 3 seconds
-setInterval(updateConnectionStatus, 3000);
+// 后备方案：如果状态管理器加载失败，使用传统方式
+setTimeout(() => {
+  if (!window.statusManager) {
+    console.log('StatusManager not loaded, falling back to legacy mode');
+    updateConnectionStatus();
+    setInterval(updateConnectionStatus, 3000);
+  }
+}, 1000);

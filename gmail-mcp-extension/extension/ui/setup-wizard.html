@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gmail MCP Bridge Setup Wizard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .wizard-container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 600px;
+      overflow: hidden;
+    }
+
+    .wizard-header {
+      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+      padding: 30px;
+      text-align: center;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .wizard-header .logo {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 16px;
+      background: white;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .wizard-header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 8px;
+    }
+
+    .wizard-header p {
+      font-size: 16px;
+      color: #64748b;
+      line-height: 1.5;
+    }
+
+    .progress-bar {
+      height: 4px;
+      background: #e2e8f0;
+      position: relative;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6, #06b6d4);
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    .wizard-content {
+      padding: 40px;
+      min-height: 400px;
+    }
+
+    .step {
+      display: none;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    .step.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .step-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .step-icon {
+      width: 32px;
+      height: 32px;
+      background: #3b82f6;
+      color: white;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+
+    .step-content {
+      color: #475569;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .requirements-list {
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+
+    .requirement {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .requirement:last-child {
+      border-bottom: none;
+    }
+
+    .requirement-status {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .requirement-status.checking {
+      background: #f59e0b;
+      color: white;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .requirement-status.success {
+      background: #10b981;
+      color: white;
+    }
+
+    .requirement-status.error {
+      background: #ef4444;
+      color: white;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .command-block {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 16px;
+      border-radius: 8px;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 14px;
+      margin: 16px 0;
+      position: relative;
+      overflow-x: auto;
+    }
+
+    .command-block .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: #475569;
+      border: none;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .command-block:hover .copy-btn {
+      opacity: 1;
+    }
+
+    .command-block .copy-btn:hover {
+      background: #64748b;
+    }
+
+    .install-progress {
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+
+    .progress-step {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .progress-step:last-child {
+      border-bottom: none;
+    }
+
+    .progress-step-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .progress-step.pending .progress-step-icon {
+      background: #e2e8f0;
+      color: #94a3b8;
+    }
+
+    .progress-step.running .progress-step-icon {
+      background: #f59e0b;
+      color: white;
+      animation: spin 1s linear infinite;
+    }
+
+    .progress-step.completed .progress-step-icon {
+      background: #10b981;
+      color: white;
+    }
+
+    .progress-step.error .progress-step-icon {
+      background: #ef4444;
+      color: white;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .wizard-actions {
+      background: #f8fafc;
+      padding: 20px 40px;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2563eb;
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #64748b;
+      border: 1px solid #e2e8f0;
+    }
+
+    .btn-secondary:hover {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .alert {
+      padding: 16px;
+      border-radius: 8px;
+      margin: 16px 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .alert-success {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #166534;
+    }
+
+    .alert-warning {
+      background: #fffbeb;
+      border: 1px solid #fed7aa;
+      color: #92400e;
+    }
+
+    .alert-error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+    }
+
+    .step-indicator {
+      font-size: 12px;
+      color: #94a3b8;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="wizard-container">
+    <div class="wizard-header">
+      <div class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="#3b82f6">
+          <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/>
+        </svg>
+      </div>
+      <h1>Gmail MCP Bridge Setup</h1>
+      <p>Let's get you connected in just a few simple steps</p>
+    </div>
+
+    <div class="progress-bar">
+      <div id="progress-fill" class="progress-fill"></div>
+    </div>
+
+    <div class="wizard-content">
+      <!-- Step 1: Welcome & Requirements -->
+      <div id="step-1" class="step active">
+        <div class="step-title">
+          <div class="step-icon">1</div>
+          Welcome to Gmail MCP Bridge
+        </div>
+        <div class="step-content">
+          <p>This wizard will guide you through setting up Gmail MCP Bridge to connect your Gmail account with Claude Desktop. The entire process takes about 2-3 minutes.</p>
+          
+          <div class="requirements-list">
+            <h4 style="margin-bottom: 16px; color: #1e293b;">System Requirements</h4>
+            <div class="requirement">
+              <div id="node-status" class="requirement-status checking">?</div>
+              <div>
+                <strong>Node.js (v14 or higher)</strong>
+                <div style="font-size: 13px; color: #64748b;">Required for running the MCP server</div>
+              </div>
+            </div>
+            <div class="requirement">
+              <div id="chrome-status" class="requirement-status checking">?</div>
+              <div>
+                <strong>Google Chrome or Chromium</strong>
+                <div style="font-size: 13px; color: #64748b;">For the browser extension</div>
+              </div>
+            </div>
+            <div class="requirement">
+              <div id="claude-status" class="requirement-status checking">?</div>
+              <div>
+                <strong>Claude Desktop App</strong>
+                <div style="font-size: 13px; color: #64748b;">The AI assistant that will connect to Gmail</div>
+              </div>
+            </div>
+            <div class="requirement">
+              <div id="gmail-status" class="requirement-status checking">?</div>
+              <div>
+                <strong>Gmail Account</strong>
+                <div style="font-size: 13px; color: #64748b;">Must be signed in to mail.google.com</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="alert alert-warning" id="requirements-warning" style="display: none;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2L2 19h20L12 2zm0 15h-2v-2h2v2zm0-4h-2V9h2v4z"/>
+            </svg>
+            <div>Some requirements are not met. Please install the missing components before continuing.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Installation -->
+      <div id="step-2" class="step">
+        <div class="step-title">
+          <div class="step-icon">2</div>
+          Install MCP Server
+        </div>
+        <div class="step-content">
+          <p>Now let's install and start the MCP server that will bridge Gmail with Claude.</p>
+
+          <div class="command-block">
+            <button class="copy-btn" onclick="copyCommand(this, 'cd ~/CascadeProjects/gmail-mcp/gmail-mcp-extension/mcp-server')">Copy</button>
+            cd ~/CascadeProjects/gmail-mcp/gmail-mcp-extension/mcp-server
+          </div>
+
+          <div class="command-block">
+            <button class="copy-btn" onclick="copyCommand(this, 'npm install')">Copy</button>
+            npm install
+          </div>
+
+          <div class="command-block">
+            <button class="copy-btn" onclick="copyCommand(this, 'npm run bridge')">Copy</button>
+            npm run bridge
+          </div>
+
+          <div class="install-progress" id="install-progress" style="display: none;">
+            <h4 style="margin-bottom: 16px; color: #1e293b;">Installation Progress</h4>
+            <div class="progress-step pending" id="step-navigate">
+              <div class="progress-step-icon">1</div>
+              <div>Navigate to MCP server directory</div>
+            </div>
+            <div class="progress-step pending" id="step-install">
+              <div class="progress-step-icon">2</div>
+              <div>Install dependencies</div>
+            </div>
+            <div class="progress-step pending" id="step-start">
+              <div class="progress-step-icon">3</div>
+              <div>Start bridge server</div>
+            </div>
+          </div>
+
+          <div class="alert alert-warning">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M13 14h-2V9h2m0 9h-2v-2h2M12 2A10 10 0 002 12a10 10 0 0010 10 10 10 0 0010-10A10 10 0 0012 2z"/>
+            </svg>
+            <div>
+              <strong>Important:</strong> Keep the terminal window open after running <code>npm run bridge</code>. 
+              The server needs to stay running for the connection to work.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Configure Claude Desktop -->
+      <div id="step-3" class="step">
+        <div class="step-title">
+          <div class="step-icon">3</div>
+          Configure Claude Desktop
+        </div>
+        <div class="step-content">
+          <p>Now we need to configure Claude Desktop to connect to our Gmail MCP server.</p>
+
+          <p style="margin-bottom: 16px;">The configuration file is typically located at:</p>
+          <div class="command-block">
+            <button class="copy-btn" onclick="copyCommand(this, '~/Library/Application Support/Claude/claude_desktop_config.json')">Copy</button>
+            ~/Library/Application Support/Claude/claude_desktop_config.json
+          </div>
+
+          <p style="margin: 16px 0;">Add this configuration to your <code>claude_desktop_config.json</code>:</p>
+          <div class="command-block" style="white-space: pre-wrap; font-size: 12px;">
+            <button class="copy-btn" onclick="copyConfig(this)">Copy</button>
+{
+  "mcpServers": {
+    "gmail": {
+      "command": "node",
+      "args": ["/path/to/gmail-mcp-extension/mcp-server/index.js"],
+      "env": {}
+    }
+  }
+}</div>
+
+          <div class="alert alert-warning">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M13 14h-2V9h2m0 9h-2v-2h2M12 2A10 10 0 002 12a10 10 0 0010 10 10 10 0 0010-10A10 10 0 0012 2z"/>
+            </svg>
+            <div>
+              <strong>Remember:</strong> Replace <code>/path/to/gmail-mcp-extension</code> with the actual path to your project directory.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4: Test Connection -->
+      <div id="step-4" class="step">
+        <div class="step-title">
+          <div class="step-icon">4</div>
+          Test Connection
+        </div>
+        <div class="step-content">
+          <p>Let's verify that everything is working correctly.</p>
+
+          <div class="install-progress">
+            <div class="progress-step" id="test-extension">
+              <div class="progress-step-icon">1</div>
+              <div>Browser extension connection</div>
+            </div>
+            <div class="progress-step pending" id="test-bridge">
+              <div class="progress-step-icon">2</div>
+              <div>Bridge server status</div>
+            </div>
+            <div class="progress-step pending" id="test-gmail">
+              <div class="progress-step-icon">3</div>
+              <div>Gmail access verification</div>
+            </div>
+            <div class="progress-step pending" id="test-claude">
+              <div class="progress-step-icon">4</div>
+              <div>Claude Desktop integration</div>
+            </div>
+          </div>
+
+          <div id="test-results" style="display: none;">
+            <!-- Test results will be populated here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 5: Success -->
+      <div id="step-5" class="step">
+        <div class="step-title">
+          <div class="step-icon">✓</div>
+          Setup Complete!
+        </div>
+        <div class="step-content">
+          <div class="alert alert-success">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+            </svg>
+            <div>
+              <strong>Congratulations!</strong> Your Gmail MCP Bridge is now set up and ready to use.
+            </div>
+          </div>
+
+          <h4 style="margin: 24px 0 16px; color: #1e293b;">What's Next?</h4>
+          <ul style="list-style: none; padding: 0;">
+            <li style="padding: 8px 0; display: flex; align-items: center; gap: 12px;">
+              <span style="background: #3b82f6; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;">1</span>
+              <span>Open Claude Desktop and start a new conversation</span>
+            </li>
+            <li style="padding: 8px 0; display: flex; align-items: center; gap: 12px;">
+              <span style="background: #3b82f6; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;">2</span>
+              <span>Ask Claude to help you with your Gmail tasks</span>
+            </li>
+            <li style="padding: 8px 0; display: flex; align-items: center; gap: 12px;">
+              <span style="background: #3b82f6; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;">3</span>
+              <span>Monitor the connection status using this extension's popup</span>
+            </li>
+          </ul>
+
+          <p style="margin-top: 24px; color: #64748b;">
+            Need help? Check out our 
+            <a href="https://github.com/cafferychen777/gmail-mcp" target="_blank" style="color: #3b82f6;">documentation</a> 
+            or use the troubleshooting tools in the extension.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="wizard-actions">
+      <div class="step-indicator">
+        <span id="step-counter">Step 1 of 5</span>
+      </div>
+      
+      <div style="display: flex; gap: 12px;">
+        <button id="prev-btn" class="btn btn-secondary" style="display: none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          Previous
+        </button>
+        
+        <button id="next-btn" class="btn btn-primary" disabled>
+          <span>Check Requirements</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="setup-wizard.js"></script>
+</body>
+</html>

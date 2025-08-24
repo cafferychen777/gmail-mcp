@@ -5,7 +5,8 @@
   "description": "Bridge between Gmail and MCP server",
   "permissions": [
     "tabs",
-    "scripting"
+    "scripting",
+    "storage"
   ],
   "host_permissions": [
     "https://mail.google.com/*"

@@ -1,0 +1,18 @@
+# 截图目录
+
+这个目录用于存放文档中使用的截图文件。
+
+## 截图命名规范
+
+- `installation-step-1.png` - 安装指南第1步截图
+- `chrome-extensions-page.png` - Chrome扩展页面
+- `claude-desktop-config.png` - Claude Desktop配置界面
+- `extension-popup-connected.png` - 扩展连接状态
+- `gmail-interface-example.png` - Gmail界面示例
+
+## 截图标准
+
+- 分辨率：建议1920x1080或更高
+- 格式：PNG（支持透明背景）
+- 大小：单个文件不超过2MB
+- 内容：确保关键元素清晰可见，必要时添加箭头或高亮标记

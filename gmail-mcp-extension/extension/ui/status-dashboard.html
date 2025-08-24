@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 380px;
+      min-height: 500px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f8fafc;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .header .subtitle {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      padding: 20px;
+    }
+
+    .status-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      border: 1px solid #e2e8f0;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      position: relative;
+    }
+
+    .status-dot.connected {
+      background: #10b981;
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+    }
+
+    .status-dot.connected::after {
+      content: '';
+      position: absolute;
+      top: -3px;
+      left: -3px;
+      right: -3px;
+      bottom: -3px;
+      border-radius: 50%;
+      background: #10b981;
+      opacity: 0.3;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .status-dot.disconnected {
+      background: #ef4444;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+    }
+
+    .status-dot.checking {
+      background: #f59e0b;
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+      animation: checking 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.3; }
+      50% { transform: scale(1.2); opacity: 0.1; }
+    }
+
+    @keyframes checking {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .status-text {
+      font-size: 14px;
+      font-weight: 500;
+      color: #334155;
+    }
+
+    .status-details {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .metric {
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+      border: 1px solid #e2e8f0;
+    }
+
+    .metric-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 4px;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .metric.success .metric-value { color: #10b981; }
+    .metric.warning .metric-value { color: #f59e0b; }
+    .metric.error .metric-value { color: #ef4444; }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2563eb;
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #64748b;
+      border: 1px solid #e2e8f0;
+    }
+
+    .btn-secondary:hover {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .rotating {
+      animation: rotate 1s linear infinite;
+    }
+
+    @keyframes rotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .performance-card {
+      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+      border: 1px solid #0ea5e9;
+    }
+
+    .performance-chart {
+      height: 60px;
+      background: rgba(14, 165, 233, 0.1);
+      border-radius: 6px;
+      margin: 12px 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .chart-bar {
+      position: absolute;
+      bottom: 0;
+      width: 4px;
+      background: #0ea5e9;
+      border-radius: 2px 2px 0 0;
+      transition: height 0.3s ease;
+    }
+
+    .quick-actions {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      border: 1px solid #e2e8f0;
+    }
+
+    .quick-actions h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 12px;
+    }
+
+    .action-button {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 8px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: white;
+      text-align: left;
+      font-size: 13px;
+      color: #334155;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .action-button:hover {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+
+    .action-button:last-child {
+      margin-bottom: 0;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 16px;
+      font-size: 11px;
+      color: #94a3b8;
+      border-top: 1px solid #e2e8f0;
+      background: white;
+    }
+
+    .footer a {
+      color: #3b82f6;
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    .gmail-icon {
+      width: 20px;
+      height: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>
+      <svg class="gmail-icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/>
+      </svg>
+      Gmail MCP Bridge
+    </h1>
+    <div class="subtitle">Advanced Status Dashboard</div>
+  </div>
+
+  <div class="dashboard-grid">
+    <!-- Main Status Card -->
+    <div class="status-card">
+      <div class="card-header">
+        <div class="card-title">Connection Status</div>
+      </div>
+      
+      <div class="status-indicator">
+        <div id="status-dot" class="status-dot checking"></div>
+        <div>
+          <div id="status-text" class="status-text">Checking connection...</div>
+          <div id="status-details" class="status-details">Please wait while we verify the connection</div>
+        </div>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric" id="response-time-metric">
+          <div class="metric-value" id="response-time">--</div>
+          <div class="metric-label">Response Time</div>
+        </div>
+        <div class="metric" id="uptime-metric">
+          <div class="metric-value" id="uptime">--</div>
+          <div class="metric-label">Uptime</div>
+        </div>
+        <div class="metric" id="success-rate-metric">
+          <div class="metric-value" id="success-rate">--</div>
+          <div class="metric-label">Success Rate</div>
+        </div>
+        <div class="metric" id="error-rate-metric">
+          <div class="metric-value" id="error-rate">--</div>
+          <div class="metric-label">Error Rate</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="refresh-btn" class="btn btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3.68 11.12h-.01m.01 0A8.32 8.32 0 0112 3.68a8.32 8.32 0 018.32 8.32m-16.64 0v-4m0 4h4m12.64.88h.01m-.01 0A8.32 8.32 0 0112 20.32a8.32 8.32 0 01-8.32-8.32m16.64 0v4m0-4h-4"/>
+          </svg>
+          <span>Refresh</span>
+        </button>
+        <button id="settings-btn" class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+          </svg>
+          <span>Settings</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Performance Monitor Card -->
+    <div class="status-card performance-card">
+      <div class="card-header">
+        <div class="card-title">Performance Monitor</div>
+      </div>
+      
+      <div class="performance-chart" id="performance-chart">
+        <!-- Chart bars will be generated dynamically -->
+      </div>
+      
+      <div style="display: flex; justify-content: space-between; font-size: 11px; color: #64748b;">
+        <span>Response Time Trend</span>
+        <span id="chart-latest">--ms</span>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+      <h3>Quick Actions</h3>
+      <button class="action-button" id="open-setup">
+        🚀 Launch Setup Wizard
+      </button>
+      <button class="action-button" id="open-troubleshoot">
+        🔧 Troubleshoot Issues  
+      </button>
+      <button class="action-button" id="open-logs">
+        📋 View System Logs
+      </button>
+      <button class="action-button" id="open-github">
+        📖 View Documentation
+      </button>
+    </div>
+  </div>
+
+  <div class="footer">
+    <a href="https://github.com/cafferychen777/gmail-mcp" target="_blank">Gmail MCP Bridge v1.0.0</a>
+  </div>
+
+  <script src="../core/status-manager.js"></script>
+  <script src="status-dashboard.js"></script>
+</body>
+</html>

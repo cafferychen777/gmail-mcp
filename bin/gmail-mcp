@@ -1,0 +1,441 @@
+#!/usr/bin/env node
+
+/**
+ * Gmail MCP Bridge CLI
+ * 
+ * 用户友好的命令行界面，让安装变得像 "npm install" 一样简单
+ * 
+ * 设计哲学（Linus 风格）:
+ * 1. 简洁明了 - 用户不需要阅读长篇文档就能使用
+ * 2. 消除歧义 - 每个命令都有明确的作用，没有模糊地带  
+ * 3. 实用至上 - 解决用户的真实问题，不是炫技
+ */
+
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+import { InstallationManager } from '../tools/installer/installer.js';
+import { SystemDetector } from '../tools/installer/system-detector.js';
+import { UserInterface } from '../tools/installer/ui.js';
+import { ClaudeConfigManager } from '../tools/installer/claude-config.js';
+import { ExtensionManager } from '../tools/installer/extension-manager.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const ROOT_DIR = resolve(__dirname, '..');
+
+/**
+ * 命令行界面类
+ * 简单有效，没有过度工程化
+ */
+class GmailMcpCli {
+    constructor() {
+        this.ui = new UserInterface();
+        this.installer = new InstallationManager();
+        this.detector = new SystemDetector();
+        this.claudeConfig = new ClaudeConfigManager();
+        this.extensionManager = new ExtensionManager();
+        
+        // 命令映射 - 用数据而非条件分支
+        this.COMMANDS = {
+            'install': {
+                handler: this.install.bind(this),
+                description: '自动安装和配置所有组件',
+                usage: 'gmail-mcp install [--force]'
+            },
+            'status': {
+                handler: this.status.bind(this),
+                description: '检查当前安装状态',
+                usage: 'gmail-mcp status'
+            },
+            'doctor': {
+                handler: this.doctor.bind(this),
+                description: '诊断系统问题',
+                usage: 'gmail-mcp doctor'
+            },
+            'fix': {
+                handler: this.fix.bind(this),
+                description: '尝试自动修复问题',
+                usage: 'gmail-mcp fix'
+            },
+            'test': {
+                handler: this.test.bind(this),
+                description: '测试功能是否正常',
+                usage: 'gmail-mcp test'
+            },
+            'uninstall': {
+                handler: this.uninstall.bind(this),
+                description: '完全卸载',
+                usage: 'gmail-mcp uninstall [--force]'
+            },
+            'help': {
+                handler: this.help.bind(this),
+                description: '显示帮助信息',
+                usage: 'gmail-mcp help [command]'
+            }
+        };
+    }
+
+    /**
+     * 主入口点
+     */
+    async run() {
+        const args = process.argv.slice(2);
+        const command = args[0] || 'help';
+        const flags = this._parseFlags(args);
+
+        try {
+            const commandConfig = this.COMMANDS[command];
+            if (commandConfig) {
+                await commandConfig.handler(flags);
+            } else {
+                this.ui.showError(`未知命令: ${command}`);
+                await this.help();
+                process.exit(1);
+            }
+        } catch (error) {
+            this.ui.showError(`执行失败: ${error.message}`);
+            
+            if (flags.verbose) {
+                console.error('\n详细错误信息:');
+                console.error(error.stack);
+            }
+            
+            process.exit(1);
+        } finally {
+            this.ui.close();
+        }
+    }
+
+    /**
+     * 安装命令
+     */
+    async install(flags) {
+        if (flags.dryRun) {
+            this.ui.showInfo('🧪 模拟运行模式 - 仅显示将要执行的操作');
+            await this._showInstallPlan();
+            return;
+        }
+
+        if (!flags.force) {
+            const confirmed = await this.ui.confirm('确定要开始安装吗？这将修改您的系统配置。');
+            if (!confirmed) {
+                this.ui.showInfo('安装已取消');
+                return;
+            }
+        }
+
+        await this.installer.install({ 
+            force: flags.force, 
+            verbose: flags.verbose,
+            autoFix: true // 启用智能自动修复
+        });
+    }
+
+    /**
+     * 状态检查命令
+     */
+    async status(flags) {
+        this.ui.showInfo('🔍 检查 Gmail MCP Bridge 状态...');
+        
+        const spinner = this.ui.showSpinner('检查系统状态...');
+        
+        try {
+            // 并行检查所有组件状态
+            const [systemStatus, claudeStatus, extensionStatus] = await Promise.all([
+                this.detector.quickDiagnosis(),
+                this.claudeConfig.getStatus(),
+                this.extensionManager.getStatus()
+            ]);
+            
+            spinner.stop();
+            
+            // 显示整体状态
+            this._showStatusSummary({
+                system: systemStatus,
+                claude: claudeStatus,
+                extension: extensionStatus
+            });
+
+        } catch (error) {
+            spinner.stop();
+            throw error;
+        }
+    }
+
+    /**
+     * 系统诊断命令
+     */
+    async doctor(flags) {
+        this.ui.showInfo('🩺 运行系统诊断...');
+        
+        const diagnosis = await this.detector.quickDiagnosis();
+        this.ui.showDiagnosisResult(diagnosis);
+        
+        if (diagnosis.overall !== 'ready') {
+            const shouldFix = await this.ui.confirm('发现问题，是否尝试自动修复？');
+            if (shouldFix) {
+                await this.fix(flags);
+            }
+        }
+    }
+
+    /**
+     * 自动修复命令
+     */
+    async fix(flags) {
+        this.ui.showInfo('🔧 尝试自动修复...');
+        
+        const fixes = [];
+        
+        try {
+            // 修复 Claude 配置
+            const claudeRepair = await this.claudeConfig.repairConfig(
+                resolve(ROOT_DIR, 'gmail-mcp-extension')
+            );
+            if (claudeRepair.fixes.length > 0) {
+                fixes.push(...claudeRepair.fixes.map(fix => `Claude: ${fix}`));
+            }
+
+            // TODO: 添加更多修复逻辑
+            
+            if (fixes.length > 0) {
+                this.ui.showSuccess(`✅ 修复完成:`);
+                fixes.forEach(fix => this.ui.showInfo(`  • ${fix}`));
+            } else {
+                this.ui.showInfo('未发现需要修复的问题');
+            }
+            
+        } catch (error) {
+            this.ui.showError(`自动修复失败: ${error.message}`);
+        }
+    }
+
+    /**
+     * 测试命令
+     */
+    async test(flags) {
+        this.ui.showInfo('🧪 运行功能测试...');
+        
+        const tests = [];
+        
+        // 测试系统要求
+        tests.push(await this._testSystemRequirements());
+        
+        // 测试 Claude 配置
+        tests.push(await this._testClaudeConfig());
+        
+        // 测试扩展配置
+        tests.push(await this._testExtensionConfig());
+        
+        // 显示测试结果
+        this.ui.showTestResults({
+            tests,
+            total: tests.length,
+            passed: tests.filter(t => t.passed).length,
+            failed: tests.filter(t => !t.passed).length,
+            overall: tests.every(t => t.passed) ? 'success' : 'failure'
+        });
+    }
+
+    /**
+     * 卸载命令
+     */
+    async uninstall(flags) {
+        if (!flags.force) {
+            this.ui.showWarning('⚠️  这将完全移除 Gmail MCP Bridge 的所有配置。');
+            const confirmed = await this.ui.confirm('确定要继续吗？');
+            if (!confirmed) {
+                this.ui.showInfo('卸载已取消');
+                return;
+            }
+        }
+
+        await this.installer.uninstall();
+    }
+
+    /**
+     * 帮助命令
+     */
+    async help(flags) {
+        if (flags.command && this.COMMANDS[flags.command]) {
+            this._showCommandHelp(flags.command);
+        } else {
+            this.ui.showHelp();
+        }
+    }
+
+    /**
+     * 解析命令行标志
+     */
+    _parseFlags(args) {
+        const flags = {
+            force: false,
+            verbose: false,
+            dryRun: false,
+            help: false
+        };
+
+        for (let i = 1; i < args.length; i++) {
+            const arg = args[i];
+            switch (arg) {
+                case '--force':
+                case '-f':
+                    flags.force = true;
+                    break;
+                case '--verbose':
+                case '-v':
+                    flags.verbose = true;
+                    break;
+                case '--dry-run':
+                    flags.dryRun = true;
+                    break;
+                case '--help':
+                case '-h':
+                    flags.help = true;
+                    break;
+                default:
+                    if (arg.startsWith('--')) {
+                        console.warn(`警告: 未知选项 ${arg}`);
+                    } else {
+                        // 非选项参数
+                        flags.command = arg;
+                    }
+            }
+        }
+
+        return flags;
+    }
+
+    /**
+     * 显示安装计划（dry run）
+     */
+    async _showInstallPlan() {
+        const steps = [
+            '1. 检测系统环境',
+            '2. 备份现有配置',
+            '3. 安装 MCP 服务器依赖',
+            '4. 配置 Claude Desktop',
+            '5. 设置浏览器扩展',
+            '6. 验证安装'
+        ];
+
+        this.ui.showInfo('📋 安装计划:');
+        steps.forEach(step => this.ui.showInfo(`  ${step}`));
+    }
+
+    /**
+     * 显示状态摘要
+     */
+    _showStatusSummary(status) {
+        console.log('\n📊 系统状态摘要');
+        console.log('─'.repeat(50));
+        
+        // 系统状态
+        if (status.system.overall === 'ready') {
+            this.ui.showSuccess(`系统环境: 就绪 (${status.system.ready}/${status.system.total})`);
+        } else {
+            this.ui.showError(`系统环境: ${status.system.issues} 个问题`);
+        }
+
+        // Claude 状态
+        if (status.claude.status === 'configured') {
+            this.ui.showSuccess(`Claude Desktop: ${status.claude.message}`);
+        } else {
+            this.ui.showError(`Claude Desktop: ${status.claude.message}`);
+        }
+
+        // 扩展状态
+        if (status.extension.status === 'configured') {
+            this.ui.showSuccess(`Chrome 扩展: ${status.extension.message}`);
+        } else if (status.extension.status === 'partial') {
+            this.ui.showWarning(`Chrome 扩展: ${status.extension.message}`);
+        } else {
+            this.ui.showError(`Chrome 扩展: ${status.extension.message}`);
+        }
+    }
+
+    /**
+     * 测试系统要求
+     */
+    async _testSystemRequirements() {
+        try {
+            const diagnosis = await this.detector.quickDiagnosis();
+            return {
+                name: '系统要求',
+                passed: diagnosis.overall === 'ready',
+                status: diagnosis.overall === 'ready' ? '通过' : '失败',
+                details: `${diagnosis.ready}/${diagnosis.total} 项检查通过`,
+                suggestion: diagnosis.overall !== 'ready' ? '运行 gmail-mcp doctor 查看详情' : null
+            };
+        } catch (error) {
+            return {
+                name: '系统要求',
+                passed: false,
+                status: '错误',
+                details: error.message
+            };
+        }
+    }
+
+    /**
+     * 测试 Claude 配置
+     */
+    async _testClaudeConfig() {
+        try {
+            const verification = await this.claudeConfig.verify();
+            return {
+                name: 'Claude Desktop 配置',
+                passed: verification.valid,
+                status: verification.valid ? '正常' : '异常',
+                details: verification.valid ? verification.serverScript : verification.error,
+                suggestion: !verification.valid ? '运行 gmail-mcp fix 尝试修复' : null
+            };
+        } catch (error) {
+            return {
+                name: 'Claude Desktop 配置',
+                passed: false,
+                status: '错误',
+                details: error.message
+            };
+        }
+    }
+
+    /**
+     * 测试扩展配置
+     */
+    async _testExtensionConfig() {
+        try {
+            const verification = await this.extensionManager.verify();
+            return {
+                name: 'Chrome 扩展配置',
+                passed: verification.valid,
+                status: verification.valid ? '正常' : '异常',
+                details: verification.extensionDetected ? '扩展已安装' : 'Native Host 已配置',
+                suggestion: !verification.extensionDetected ? '需要手动安装 Chrome 扩展' : null
+            };
+        } catch (error) {
+            return {
+                name: 'Chrome 扩展配置',
+                passed: false,
+                status: '错误',
+                details: error.message
+            };
+        }
+    }
+
+    /**
+     * 显示单个命令的帮助
+     */
+    _showCommandHelp(commandName) {
+        const command = this.COMMANDS[commandName];
+        console.log(`\n${command.usage}`);
+        console.log(`${command.description}\n`);
+    }
+}
+
+// CLI 入口点
+const cli = new GmailMcpCli();
+cli.run().catch(error => {
+    console.error('致命错误:', error.message);
+    process.exit(1);
+});
