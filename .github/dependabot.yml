@@ -3,7 +3,7 @@ updates:
   - package-ecosystem: "npm"
     directory: "/src"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -14,7 +14,7 @@ updates:
   - package-ecosystem: "npm"
     directory: "/tools/npx-installer"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -25,7 +25,7 @@ updates:
   - package-ecosystem: "npm"
     directory: "/gmail-mcp-extension/mcp-server"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
