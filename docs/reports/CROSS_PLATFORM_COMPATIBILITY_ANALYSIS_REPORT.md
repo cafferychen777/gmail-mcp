@@ -323,7 +323,7 @@ app.listen(3456, 'localhost', () => {
 
 #### CI/CD管道配置
 ```yaml
-# 建议的GitHub Actions配置
+# 建议的CI矩阵
 matrix:
   os: [ubuntu-20.04, windows-2019, macos-11]
   node-version: [18, 20, 22]

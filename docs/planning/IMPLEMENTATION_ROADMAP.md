@@ -304,18 +304,13 @@ npm run test:ux
 
 ### 持续集成配置
 ```yaml
-# .github/workflows/ci.yml
 name: Gmail MCP CI/CD
-
-on: [push, pull_request]
 
 jobs:
   test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        node-version: [18, 20]
+    matrix:
+      os: [ubuntu-latest, windows-latest, macos-latest]
+      node-version: [18, 20]
     
     steps:
     - uses: actions/checkout@v3
@@ -507,7 +502,7 @@ const technicalDebtPlan = {
 - Husky (Git hooks)
 
 # 测试和部署
-- GitHub Actions (CI/CD)
+- CI/CD automation platform
 - Vercel (文档站点部署)
 - npm (包发布)
 ```

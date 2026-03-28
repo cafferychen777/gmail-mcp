@@ -1,6 +1,6 @@
 # Release Guide
 
-This repository uses GitHub Actions to automatically create releases when tags are pushed.
+This repository uses a manual release process when tags are pushed.
 
 ## Creating a Release
 
@@ -16,10 +16,10 @@ This repository uses GitHub Actions to automatically create releases when tags a
    git push origin v1.0.1
    ```
 
-3. **The GitHub Action will automatically**:
+3. **Run the release steps manually**:
    - Run tests
    - Create a release package
-   - Generate changelog from git commits
+   - Generate a changelog from git commits if needed
    - Create a GitHub release with the packaged extension
 
 ## Version Numbering
